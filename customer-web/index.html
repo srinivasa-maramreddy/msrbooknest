@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BookNest India | Book Shopping</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-main">
+      <a class="logo" href="#">booknest<span>.in</span></a>
+
+      <div class="deliver-pill">
+        <span class="small">Deliver to</span>
+        <strong>India</strong>
+      </div>
+
+      <div class="top-search" role="search">
+        <select id="searchCategory" aria-label="Search category">
+          <option value="all">All</option>
+          <option value="title">Title</option>
+          <option value="author">Author</option>
+        </select>
+        <input id="topSearchInput" type="text" placeholder="Search BookNest" />
+        <button id="topSearchBtn" aria-label="Search">Search</button>
+      </div>
+
+      <button id="authActionBtn" class="header-btn">Hello, Sign in</button>
+      <a class="header-link" href="#orders">Returns & Orders</a>
+      <button id="cartBtn" class="header-cart">Cart <span id="cartCount">0</span></button>
+    </div>
+
+    <div class="header-sub">
+      <a href="#home">Home</a>
+      <a href="#new-arrivals">New Arrivals</a>
+      <a href="#best-sellers">Best Sellers</a>
+      <a href="#catalog">All Books</a>
+      <a href="#orders">My Orders</a>
+    </div>
+  </header>
+
+  <main class="page" id="home">
+    <section class="hero-wrap">
+      <div class="hero-slider" id="heroSlides"></div>
+      <div class="hero-controls">
+        <button id="prevHeroBtn" class="hero-nav">Prev</button>
+        <div id="heroDots" class="hero-dots"></div>
+        <button id="nextHeroBtn" class="hero-nav">Next</button>
+      </div>
+    </section>
+
+    <section class="market-strip">
+      <article class="strip-card">
+        <h3>Customer Favorites</h3>
+        <div id="heroHighlight" class="mini-list"></div>
+      </article>
+      <article class="strip-card">
+        <h3>Fast Payments</h3>
+        <ul>
+          <li>UPI checkout</li>
+          <li>Credit Card</li>
+          <li>Debit Card</li>
+        </ul>
+      </article>
+      <article class="strip-card">
+        <h3>Store Promise</h3>
+        <ul>
+          <li>Family-run bookstore</li>
+          <li>Careful packing</li>
+          <li>Quick support</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="main-grid">
+      <aside class="filters-panel">
+        <h3>Filters</h3>
+        <label class="field-label" for="searchInput">Search books</label>
+        <input id="searchInput" type="text" placeholder="Type title or author" />
+        <button id="clearSearchBtn" class="btn btn-light">Clear Search</button>
+
+        <div id="quickFilterBar" class="chip-list">
+          <button class="chip active" data-quick-filter="ALL">All</button>
+          <button class="chip" data-quick-filter="NEW">New Arrivals</button>
+          <button class="chip" data-quick-filter="BEST">Best Sellers</button>
+          <button class="chip" data-quick-filter="UNDER_400">Under Rs 400</button>
+          <button class="chip" data-quick-filter="PREMIUM">Premium</button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-box"><span>Total Books</span><strong id="totalBooksCount">0</strong></div>
+          <div class="stat-box"><span>In Cart</span><strong id="itemsInCartCount">0</strong></div>
+        </div>
+      </aside>
+
+      <div class="catalog-area">
+        <section class="section" id="new-arrivals">
+          <div class="section-head">
+            <h2>New Arrivals</h2>
+            <span class="tag">Latest</span>
+          </div>
+          <div id="newArrivalsGrid" class="product-row"></div>
+        </section>
+
+        <section class="section" id="best-sellers">
+          <div class="section-head">
+            <h2>Best Sellers</h2>
+            <span class="tag">Top Picks</span>
+          </div>
+          <div id="bestSellersGrid" class="product-row"></div>
+        </section>
+
+        <section class="section" id="catalog">
+          <div class="section-head">
+            <h2>All Books</h2>
+            <div class="sort-wrap">
+              <label for="sortSelect">Sort</label>
+              <select id="sortSelect">
+                <option value="FEATURED">Featured</option>
+                <option value="PRICE_LOW">Price: Low to High</option>
+                <option value="PRICE_HIGH">Price: High to Low</option>
+                <option value="TITLE">Title: A-Z</option>
+              </select>
+            </div>
+          </div>
+          <div id="catalogGrid" class="product-grid"></div>
+        </section>
+
+        <section class="section" id="orders">
+          <div class="section-head">
+            <h2>My Orders</h2>
+            <button id="refreshOrdersBtn" class="btn btn-light">Refresh</button>
+          </div>
+          <div id="ordersList" class="orders-list empty-state">Login to view your orders.</div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <aside id="cartDrawer" class="cart-drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h3>Your Cart</h3>
+      <button id="closeCartBtn" class="icon-btn" aria-label="Close cart">x</button>
+    </div>
+    <div id="cartItems" class="drawer-items"></div>
+    <div class="drawer-foot">
+      <div class="total-line">
+        <span>Subtotal</span>
+        <strong id="cartTotal">Rs 0</strong>
+      </div>
+      <button id="checkoutBtn" class="btn btn-primary btn-full">Proceed to Buy</button>
+    </div>
+  </aside>
+
+  <div id="backdrop" class="backdrop"></div>
+
+  <section id="authModal" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Account</h3>
+        <button id="closeAuthBtn" class="icon-btn" aria-label="Close auth">x</button>
+      </div>
+      <div class="tabs">
+        <button id="loginTabBtn" class="tab active">Login</button>
+        <button id="registerTabBtn" class="tab">Register</button>
+      </div>
+      <form id="authForm" class="modal-form">
+        <label id="nameFieldWrap" class="hidden">Full Name
+          <input id="authName" type="text" placeholder="Your name" />
+        </label>
+        <label>Email
+          <input id="authEmail" type="email" required placeholder="you@example.com" />
+        </label>
+        <label>Password
+          <input id="authPassword" type="password" required placeholder="Password" />
+        </label>
+        <button id="authSubmitBtn" class="btn btn-primary btn-full" type="submit">Login</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="checkoutModal" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Checkout</h3>
+        <button id="closeCheckoutBtn" class="icon-btn" aria-label="Close checkout">x</button>
+      </div>
+      <form id="checkoutForm" class="modal-form">
+        <label>Name
+          <input id="checkoutName" type="text" required placeholder="Customer name" />
+        </label>
+        <label>Phone
+          <input id="checkoutPhone" type="text" required placeholder="10 digit number" />
+        </label>
+        <label>Address
+          <textarea id="checkoutAddress" rows="3" required placeholder="Delivery address"></textarea>
+        </label>
+        <label>Payment Method
+          <select id="checkoutPayment" required>
+            <option value="UPI">UPI</option>
+            <option value="Credit Card">Credit Card</option>
+            <option value="Debit Card">Debit Card</option>
+          </select>
+        </label>
+        <button class="btn btn-primary btn-full" type="submit">Place Order</button>
+      </form>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

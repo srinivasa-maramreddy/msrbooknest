@@ -1,0 +1,40 @@
+services:
+  mysql-enterprise:
+    image: mysql:8.0
+    container_name: bookstore-enterprise-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: bookstore_enterprise
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - enterprise_mysql_data:/var/lib/mysql
+
+  enterprise-bookstore:
+    build:
+      context: .
+      dockerfile: enterprise-bookstore/Dockerfile
+    container_name: enterprise-bookstore-app
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://mysql-enterprise:3306/bookstore_enterprise?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: root
+      DB_PASSWORD: root123
+      APP_JWT_SECRET: TXlQcm9kQm9va3N0b3JlSldUU2VjcmV0S2V5VGhhdElzTG9uZ0FuZFN0cm9uZw==
+      APP_JWT_EXPIRATION_MS: 86400000
+      APP_ADMIN_REGISTRATION_KEY: admin-secret-key
+    ports:
+      - "8090:8090"
+    depends_on:
+      mysql-enterprise:
+        condition: service_healthy
+
+volumes:
+  enterprise_mysql_data:
