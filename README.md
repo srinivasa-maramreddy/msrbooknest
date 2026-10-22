@@ -17,6 +17,17 @@ Open **[http://localhost:5173](http://localhost:5173)**. Open the [buyback demo]
 
 For a guided interview walkthrough, seeded account details, API links, troubleshooting, and shutdown commands, see [the demo guide](docs/docker-deployment.md). For architecture and tradeoffs, see [the architecture notes](docs/architecture.md) and [the interview walkthrough](docs/interview-demo-guide.md).
 
+## Public browser demo
+
+The React storefront is published with GitHub Pages at <https://srinivasmaram8.github.io/Srinivas/>. The Pages build uses a browser-only mock adapter, so sample catalog, cart, checkout, account, and used-book buyback actions are saved in that browser. No real email/SMS, courier, or payment is sent. The Spring Boot services, MySQL, and Kafka remain available through the local Docker Compose demo above; GitHub Pages does not run those services.
+
+Demo sign-in:
+
+- Customer: `reader@msrbooknest.demo` / `ReaderDemo@123`
+- Admin: `admin@msrbooknest.demo` / `AdminDemo@123`
+
+The Pages deployment runs automatically when the storefront or its workflow changes on `main`.
+
 ## What the demo shows
 
 - **React storefront:** browse and search, suggestions, account registration/sign-in, cart, checkout, and order history.

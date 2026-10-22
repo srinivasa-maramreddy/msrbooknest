@@ -1,4 +1,5 @@
 import { getAccessToken } from "./auth.js";
+import { demoApi } from "./demo-api.js";
 
 const API = {
   auth: import.meta.env.VITE_AUTH_API_BASE_URL || "http://localhost:8081",
@@ -44,7 +45,7 @@ async function request(base, path, { token, ...options } = {}) {
 
 const json = (method, payload) => ({ method, body: JSON.stringify(payload) });
 
-export const api = {
+const springApi = {
   login: (payload) => request(API.auth, "/api/auth/login", json("POST", payload)),
   startPasswordRecovery: (payload) => request(API.auth, "/api/auth/password/forgot", json("POST", payload)),
   resetPassword: (payload) => request(API.auth, "/api/auth/password/reset", json("POST", payload)),
@@ -79,3 +80,5 @@ export const api = {
   deliverBuybackReturn: (token, id) => request(API.buyback, `/api/buybacks/${id}/return/deliver`, { ...json("POST", {}), token }),
   resolveBuybackDispute: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/dispute/resolve`, { ...json("POST", payload), token }),
 };
+
+export const api = import.meta.env.VITE_DEMO_MODE === "true" ? demoApi : springApi;

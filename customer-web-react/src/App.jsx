@@ -4,6 +4,7 @@ import { clearSession, getAccessToken, getIdentity, saveSession, subscribeIdenti
 import BuybackDashboard from "./BuybackDashboard.jsx";
 import { BOOK_PAGE_SIZE, CATALOG_CATEGORIES, readBookSpecifications, readWishlist } from "./catalog.js";
 
+const STATIC_PAGES_DEMO = import.meta.env.VITE_DEMO_MODE === "true";
 const CART_KEY = "booknest_react_guest_cart";
 const PUBLISHER_COVER_IMAGES = [
   "https://d9h54mr6do0h0.cloudfront.net/bookimage/9789366602257.jpg",
@@ -886,7 +887,7 @@ function App() {
 
   return (
     <>
-      <div className="announcement"><span>Independent books, picked with care</span><span>Free delivery on orders over ₹999</span></div>
+      <div className="announcement"><span>{STATIC_PAGES_DEMO ? "GitHub Pages demo · changes are saved in this browser" : "Independent books, picked with care"}</span><span>{STATIC_PAGES_DEMO ? "No real SMS, courier, or payment is connected" : "Free delivery on orders over ₹999"}</span></div>
       <header className="site-header">
         <div className="header-brand-group">
           <button className="header-menu-button" type="button" aria-label="Open navigation menu" aria-expanded={navigationOpen} aria-controls="site-navigation-drawer" onClick={() => setNavigationOpen(true)}><span aria-hidden="true">☰</span></button>
@@ -1086,7 +1087,7 @@ function App() {
               <p className="identity-note">Demo admin: admin@msrbooknest.demo · AdminDemo@123</p>
               <button className="button button-dark button-full" type="submit" disabled={authBusy}>{authBusy ? "Signing in…" : "Sign in"}</button>
               <p className="auth-switch">New to msrbooknest? <button type="button" onClick={() => switchAuthMode("register")}>Create an account</button></p>
-              <p className="identity-note">Login uses Spring Security and a signed demo JWT.</p>
+              <p className="identity-note">{STATIC_PAGES_DEMO ? "Public browser demo: account, cart, orders, and buyback data stay in this browser. No real SMS or payments are sent." : "Login uses Spring Security and a signed demo JWT."}</p>
             </> : authMode === "forgot" ? <>
               <label>Email or mobile number<input name="identifier" autoComplete="username" defaultValue={recoveryIdentifier} required /></label>
               <p className="identity-note">For your security, we only send the code to the email already saved on your account.</p>
