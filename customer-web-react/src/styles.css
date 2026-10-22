@@ -980,19 +980,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   object-position: center;
   background: #fff;
 }
-.book-cover:not(.book-cover-original) { padding: 0; color: #71859a; background: transparent !important; box-shadow: none; }
-.cover-placeholder-card { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; gap: 11px; border: 1px dashed #b7cce0; color: #748ca1; background: linear-gradient(145deg, #fbfdff, #eef5fb); text-align: center; }
-.cover-placeholder-card > span { color: #397fc0; font-size: 34px; line-height: 1; }
-.cover-placeholder-card small { font-size: 6px; font-weight: 700; letter-spacing: .12em; line-height: 1.7; }
-.cover-compact .cover-placeholder-card { gap: 4px; }
-.cover-compact .cover-placeholder-card > span { font-size: 18px; }
-.cover-compact .cover-placeholder-card small { font-size: 4px; }
-.book-cover:not(.book-cover-original) .cover-mark,
-.book-cover:not(.book-cover-original) .cover-title,
-.book-cover:not(.book-cover-original) .cover-author { display: none; }
-.book-cover-original > .cover-mark,
-.book-cover-original > .cover-title,
-.book-cover-original > .cover-author { z-index: 1; }
+.book-cover-original .cover-demo-image { display: none; }
+.book-cover-illustrated {
+  padding: 0;
+  color: #17324f;
+  background: #fff;
+  box-shadow: 7px 10px 17px #292b2433;
+}
+.book-cover-illustrated img { object-fit: contain; object-position: center; }
+.cover-demo-image { z-index: 1; }
+.cover-publisher-image { z-index: 2; opacity: 0; transition: opacity .15s ease; }
+.cover-publisher-image-loaded { opacity: 1; }
 
 .button-dark,
 .sell-book-action,

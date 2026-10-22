@@ -57,6 +57,61 @@ function getCoverTone(book) {
   return palette[index];
 }
 
+function escapeSvgText(value) {
+  return String(value || "").replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[character]);
+}
+
+function wrapCoverTitle(title, maxLength = 24) {
+  const words = String(title || "Untitled book").split(/\s+/);
+  const lines = [];
+  let line = "";
+  words.forEach((word) => {
+    if (line && `${line} ${word}`.length > maxLength) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  });
+  if (line) lines.push(line);
+  return lines.slice(0, 4);
+}
+
+function createDemoCoverDataUrl(book) {
+  const palette = [
+    ["#123e67", "#287caa", "#f1c95c"],
+    ["#263e72", "#526cb0", "#f2d77c"],
+    ["#184c55", "#3e968c", "#e8c96b"],
+    ["#603d69", "#9c6f9b", "#efc979"],
+    ["#8b492e", "#df8952", "#f1d48a"],
+    ["#244d70", "#5d9bb1", "#f0c653"],
+  ];
+  const bookText = `${book.title || ""} ${book.category || ""} ${book.subcategory || ""}`.toLowerCase();
+  const paletteIndex = [...String(book.id || book.title || "book")].reduce((sum, character) => sum + character.charCodeAt(0), 0) % palette.length;
+  const [base, accent, highlight] = palette[paletteIndex];
+  const titleLines = wrapCoverTitle(book.title);
+  const titleFontSize = titleLines.some((line) => line.length > 19) ? 29 : 34;
+  const safeTitle = titleLines.map((line, index) => `<tspan x="34" dy="${index ? 39 : 0}">${escapeSvgText(line)}</tspan>`).join("");
+  const safeAuthor = escapeSvgText(book.author || "MSR Booknest Editions");
+  const safeCategory = escapeSvgText(book.subcategory || book.category || "Reading collection").toUpperCase();
+  const safeGrade = escapeSvgText((book.subcategory || "").match(/class\s*\d+/i)?.[0] || "CURATED EDITION");
+  let motif = "<circle cx=\"320\" cy=\"190\" r=\"90\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".18\" stroke-width=\"2\"/><circle cx=\"320\" cy=\"190\" r=\"62\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".18\" stroke-width=\"2\"/><path d=\"M230 190h180M320 100v180\" stroke=\"#fff\" stroke-opacity=\".18\" stroke-width=\"2\"/>";
+  if (/math|algebra|geometry|quantitative|jee/i.test(bookText)) {
+    motif = "<path d=\"M245 228l74-125 74 125z\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".3\" stroke-width=\"3\"/><circle cx=\"319\" cy=\"190\" r=\"54\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".25\" stroke-width=\"3\"/><path d=\"M238 190h164M319 108v164\" stroke=\"#fff\" stroke-opacity=\".25\" stroke-width=\"2\"/>";
+  } else if (/science|physics|chemistry|biology|neet|medical/i.test(bookText)) {
+    motif = "<ellipse cx=\"320\" cy=\"186\" rx=\"105\" ry=\"38\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".3\" stroke-width=\"3\"/><ellipse cx=\"320\" cy=\"186\" rx=\"105\" ry=\"38\" transform=\"rotate(60 320 186)\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".3\" stroke-width=\"3\"/><ellipse cx=\"320\" cy=\"186\" rx=\"105\" ry=\"38\" transform=\"rotate(120 320 186)\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".3\" stroke-width=\"3\"/><circle cx=\"320\" cy=\"186\" r=\"9\" fill=\"#fff\" fill-opacity=\".75\"/>";
+  } else if (/english|literature|story|fiction|language/i.test(bookText)) {
+    motif = "<path d=\"M214 127c38-14 74-12 106 10v117c-32-22-68-24-106-10zM320 137c32-22 68-24 106-10v117c-38-14-74-12-106 10z\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".32\" stroke-width=\"4\"/><path d=\"M237 160c23-6 43-4 61 5M237 184c23-6 43-4 61 5M343 165c18-9 38-11 61-5M343 189c18-9 38-11 61-5\" stroke=\"#fff\" stroke-opacity=\".26\" stroke-width=\"3\"/>";
+  } else if (/history|social|geography|civics|political|economics/i.test(bookText)) {
+    motif = "<circle cx=\"320\" cy=\"185\" r=\"91\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".3\" stroke-width=\"3\"/><path d=\"M231 185h178M320 94c-40 45-40 137 0 182M320 94c40 45 40 137 0 182M246 140h148M246 230h148\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".27\" stroke-width=\"3\"/>";
+  } else if (/computer|program|engineering|technology|coding/i.test(bookText)) {
+    motif = "<rect x=\"247\" y=\"118\" width=\"146\" height=\"126\" rx=\"12\" fill=\"none\" stroke=\"#fff\" stroke-opacity=\".32\" stroke-width=\"4\"/><path d=\"M273 154h94M273 180h60M273 206h78M320 97v21M320 244v24M226 180h21M393 180h22\" stroke=\"#fff\" stroke-opacity=\".28\" stroke-width=\"4\" stroke-linecap=\"round\"/>";
+  }
+  const titleY = 322;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="440" height="620" viewBox="0 0 440 620"><defs><linearGradient id="cover" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${base}"/><stop offset="1" stop-color="${accent}"/></linearGradient><pattern id="grain" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#fff" fill-opacity=".16"/></pattern></defs><rect width="440" height="620" fill="url(#cover)"/><rect width="440" height="620" fill="url(#grain)"/><path d="M0 0h24v620H0z" fill="#071f36" fill-opacity=".25"/><path d="M34 32h372" stroke="#fff" stroke-opacity=".48"/><text x="34" y="58" fill="#fff" font-family="Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="2">MSR BOOKNEST</text><text x="34" y="84" fill="${highlight}" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">${safeCategory}</text><text x="34" y="106" fill="#fff" fill-opacity=".74" font-family="Arial,sans-serif" font-size="10" letter-spacing="1.2">${safeGrade}</text>${motif}<rect x="24" y="277" width="416" height="254" fill="#0b263d" fill-opacity=".44"/><path d="M34 296h54" stroke="${highlight}" stroke-width="4"/><text x="34" y="${titleY}" fill="#fff" font-family="Georgia,serif" font-size="${titleFontSize}" font-weight="700">${safeTitle}</text><text x="34" y="492" fill="#fff" fill-opacity=".84" font-family="Arial,sans-serif" font-size="13" letter-spacing=".5">${safeAuthor}</text><rect x="34" y="548" width="210" height="31" rx="3" fill="${highlight}"/><text x="48" y="568" fill="${base}" font-family="Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1.1">ILLUSTRATIVE SAMPLE COVER</text><text x="34" y="603" fill="#fff" fill-opacity=".68" font-family="Arial,sans-serif" font-size="9" letter-spacing="1.2">DEMO LISTING · VERIFY EDITION DETAILS</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 function isExamPrepBook(book) {
   return /\b(cengage|arihant|neet|jee)\b/i.test(`${book.title || ""} ${book.author || ""} ${book.description || ""}`);
 }
@@ -67,10 +122,13 @@ function Cover({ book, compact = false }) {
     ? `https://covers.openlibrary.org/b/isbn/${String(book.isbn).replace(/[^0-9X]/gi, "")}-L.jpg?default=false`
     : "");
   const [coverFailed, setCoverFailed] = useState(false);
+  const [coverLoaded, setCoverLoaded] = useState(false);
+  const isOriginalCover = Boolean(imageUrl && coverLoaded && !coverFailed);
+  const demoCoverUrl = useMemo(() => createDemoCoverDataUrl(book), [book]);
   return (
-    <div className={`book-cover cover-${getCoverTone(book)}${imageUrl && !coverFailed ? " book-cover-original" : ""}${compact ? " cover-compact" : ""}`}>
-      {imageUrl && !coverFailed ? <img src={imageUrl} alt={`Original cover of ${book.title}`} loading="lazy" onError={() => setCoverFailed(true)} /> : <div className="cover-placeholder-card" aria-label="Demo listing; original cover not verified"><span aria-hidden="true">▤</span><small>DEMO LISTING<br />COVER NOT VERIFIED</small></div>}
-      {imageUrl && !coverFailed && <><span className="cover-mark" aria-hidden="true">✳</span><span className="cover-title">{book.title}</span><span className="cover-author">{book.author}</span></>}
+    <div className={`book-cover cover-${getCoverTone(book)}${isOriginalCover ? " book-cover-original" : " book-cover-illustrated"}${compact ? " cover-compact" : ""}`}>
+      <img className="cover-demo-image" src={demoCoverUrl} alt={!imageUrl || coverFailed || !coverLoaded ? `Illustrative sample cover for ${book.title}` : ""} aria-hidden={Boolean(imageUrl && coverLoaded && !coverFailed)} />
+      {imageUrl && !coverFailed && <img className={`cover-publisher-image${coverLoaded ? " cover-publisher-image-loaded" : ""}`} src={imageUrl} alt={`Original cover of ${book.title}`} aria-hidden={!coverLoaded} loading="lazy" onLoad={() => setCoverLoaded(true)} onError={() => setCoverFailed(true)} />}
     </div>
   );
 }
