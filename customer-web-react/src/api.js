@@ -1,0 +1,81 @@
+import { getAccessToken } from "./auth.js";
+
+const API = {
+  auth: import.meta.env.VITE_AUTH_API_BASE_URL || "http://localhost:8081",
+  catalog: import.meta.env.VITE_CATALOG_API_BASE_URL || "http://localhost:8082",
+  cart: import.meta.env.VITE_CART_API_BASE_URL || "http://localhost:8084",
+  order: import.meta.env.VITE_ORDER_API_BASE_URL || "http://localhost:8083",
+  buyback: import.meta.env.VITE_BUYBACK_API_BASE_URL || "http://localhost:8086",
+};
+
+async function request(base, path, { token, ...options } = {}) {
+  const headers = new Headers(options.headers || {});
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token) {
+    const accessToken = await getAccessToken();
+    if (!accessToken) throw new Error("Your msrbooknest session has expired. Please sign in again.");
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  let response;
+  try {
+    response = await fetch(`${base}${path}`, { ...options, headers });
+  } catch {
+    throw new Error("Could not reach the bookstore service. Check that the backend is running.");
+  }
+
+  const raw = await response.text();
+  let body = null;
+  if (raw) {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      body = raw;
+    }
+  }
+  if (!response.ok) {
+    const message = body?.error || body?.message || `Request failed (${response.status})`;
+    throw new Error(message);
+  }
+  return body;
+}
+
+const json = (method, payload) => ({ method, body: JSON.stringify(payload) });
+
+export const api = {
+  login: (payload) => request(API.auth, "/api/auth/login", json("POST", payload)),
+  startPasswordRecovery: (payload) => request(API.auth, "/api/auth/password/forgot", json("POST", payload)),
+  resetPassword: (payload) => request(API.auth, "/api/auth/password/reset", json("POST", payload)),
+  registerDemo: (payload) => request(API.auth, "/api/auth/demo/register", json("POST", payload)),
+  startPhoneRegistration: (payload) => request(API.auth, "/api/auth/register/phone/start", json("POST", payload)),
+  verifyPhoneRegistration: (payload) => request(API.auth, "/api/auth/register/phone/verify", json("POST", payload)),
+  sendRegistrationEmailOtp: (payload) => request(API.auth, "/api/auth/register/email/send-otp", json("POST", payload)),
+  completeOtpRegistration: (payload) => request(API.auth, "/api/auth/register/complete", json("POST", payload)),
+  getBooks: (query = "") => request(API.catalog, `/api/products${query ? `?q=${encodeURIComponent(query)}` : ""}`),
+  createProduct: (token, payload) => request(API.catalog, "/api/admin/products", { ...json("POST", payload), token }),
+  updateProduct: (token, id, payload) => request(API.catalog, `/api/admin/products/${id}`, { ...json("PUT", payload), token }),
+  deleteProduct: (token, id) => request(API.catalog, `/api/admin/products/${id}`, { method: "DELETE", token }),
+  getCart: (token) => request(API.cart, "/api/cart", { token }),
+  addCartItem: (token, bookId, quantity) => request(API.cart, "/api/cart/items", { ...json("POST", { bookId, quantity }), token }),
+  updateCartItem: (token, bookId, quantity) => request(API.cart, `/api/cart/items/${bookId}`, { ...json("PATCH", { quantity }), token }),
+  removeCartItem: (token, bookId) => request(API.cart, `/api/cart/items/${bookId}`, { method: "DELETE", token }),
+  clearCart: (token) => request(API.cart, "/api/cart", { method: "DELETE", token }),
+  getOrders: (token) => request(API.order, "/api/orders/me", { token }),
+  placeOrder: (token, payload) => request(API.order, "/api/orders", { ...json("POST", payload), token }),
+  getBuybacks: (token) => request(API.buyback, "/api/buybacks", { token }),
+  createBuyback: (token, payload) => request(API.buyback, "/api/buybacks", { ...json("POST", payload), token }),
+  startBuybackReview: (token, id, note) => request(API.buyback, `/api/buybacks/${id}/review`, { ...json("POST", { note }), token }),
+  offerBuybackQuote: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/quote`, { ...json("POST", payload), token }),
+  decideBuybackQuote: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/quote/decision`, { ...json("POST", payload), token }),
+  submitBuybackTracking: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/shipment`, { ...json("POST", payload), token }),
+  markBuybackReceived: (token, id) => request(API.buyback, `/api/buybacks/${id}/receive`, { ...json("POST", {}), token }),
+  inspectBuyback: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/inspection`, { ...json("POST", payload), token }),
+  chooseBuybackAfterFailure: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/failure-choice`, { ...json("POST", payload), token }),
+  offerRevisedBuybackQuote: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/revision`, { ...json("POST", payload), token }),
+  decideRevisedBuybackQuote: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/revision/decision`, { ...json("POST", payload), token }),
+  dispatchBuybackReturn: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/return/dispatch`, { ...json("POST", payload), token }),
+  deliverBuybackReturn: (token, id) => request(API.buyback, `/api/buybacks/${id}/return/deliver`, { ...json("POST", {}), token }),
+  resolveBuybackDispute: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/dispute/resolve`, { ...json("POST", payload), token }),
+};

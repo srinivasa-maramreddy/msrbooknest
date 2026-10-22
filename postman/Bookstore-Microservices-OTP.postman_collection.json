@@ -1,0 +1,210 @@
+{
+  "info": {
+    "_postman_id": "2f0f8d38-67b8-4b98-8d4c-2d1f58db4a8a",
+    "name": "Bookstore Microservices OTP",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Dual OTP registration and OTP login for bookstore-microservices."
+  },
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Register (Send Email + Phone OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{fullName}}\",\n  \"email\": \"{{email}}\",\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\",\n  \"role\": \"CUSTOMER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrlAuth}}/api/auth/register",
+              "host": [
+                "{{baseUrlAuth}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Registration (Both OTP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.token) pm.environment.set('token', body.token);",
+                  "  if (body.loginId) pm.environment.set('identifier', body.loginId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"emailOtpCode\": \"{{emailOtpCode}}\",\n  \"phoneOtpCode\": \"{{phoneOtpCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrlAuth}}/api/auth/verify-registration",
+              "host": [
+                "{{baseUrlAuth}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-registration"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login Request OTP (Email/Phone)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{identifier}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrlAuth}}/api/auth/login/request-otp",
+              "host": [
+                "{{baseUrlAuth}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login",
+                "request-otp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login Verify OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.token) pm.environment.set('token', body.token);",
+                  "  if (body.loginId) pm.environment.set('identifier', body.loginId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{identifier}}\",\n  \"otpCode\": \"{{loginOtpCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrlAuth}}/api/auth/login/verify-otp",
+              "host": [
+                "{{baseUrlAuth}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login",
+                "verify-otp"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Catalog",
+      "item": [
+        {
+          "name": "Get All Books",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrlCatalog}}/api/books",
+              "host": [
+                "{{baseUrlCatalog}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Orders",
+      "item": [
+        {
+          "name": "Get My Orders (Auth Required)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlOrder}}/api/orders/my",
+              "host": [
+                "{{baseUrlOrder}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                "my"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

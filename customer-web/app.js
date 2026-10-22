@@ -1,20 +1,23 @@
 const API = {
   auth: "http://localhost:8081",
   catalog: "http://localhost:8082",
+  cart: "http://localhost:8084",
   order: "http://localhost:8083",
 };
+const AUTH_PATHS = ["/api/auth", "/auth"];
 
 const STORAGE_KEYS = {
   token: "booknest_token",
   user: "booknest_user",
   cart: "booknest_cart",
+  authPath: "booknest_auth_path",
 };
 
 const HERO_SLIDES = [
   {
     title: "Great Republic Day Reading Sale",
     text: "Up to 40% off on bestselling books across productivity, fiction and business.",
-    note: "BookNest Deal",
+    note: "msrbooknest Deal",
     gradient: "linear-gradient(120deg, #005f73, #0a9396)",
   },
   {
@@ -31,28 +34,59 @@ const HERO_SLIDES = [
   },
 ];
 
+const DEFAULT_COVER_URLS = [
+  "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1476275466078-4007374efbbe?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&w=600&q=80",
+];
+
 const priceFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
   maximumFractionDigits: 0,
 });
 
+function readJsonFromStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      return fallback;
+    }
+    return JSON.parse(raw);
+  } catch (_error) {
+    localStorage.removeItem(key);
+    return fallback;
+  }
+}
+
 const state = {
   mode: "login",
+  registerStep: 1,
+  registrationId: "",
+  phoneOtpSent: false,
+  emailOtpSent: false,
+  phoneVerified: false,
   token: localStorage.getItem(STORAGE_KEYS.token) || "",
-  user: JSON.parse(localStorage.getItem(STORAGE_KEYS.user) || "null"),
+  user: readJsonFromStorage(STORAGE_KEYS.user, null),
   books: [],
   visibleBooks: [],
   newArrivals: [],
   bestSellers: [],
   orders: [],
-  cart: JSON.parse(localStorage.getItem(STORAGE_KEYS.cart) || "[]"),
+  cart: normalizeCartItems(readJsonFromStorage(STORAGE_KEYS.cart, [])),
   searchQuery: "",
   searchCategory: "all",
   activeFilter: "ALL",
+  activeFilters: new Set(),
   sortMode: "FEATURED",
   heroIndex: 0,
   heroTimer: null,
+  suggestionTimer: null,
+  suggestionRequestId: 0,
+  authPath: localStorage.getItem(STORAGE_KEYS.authPath) || AUTH_PATHS[0],
 };
 
 const el = {};
@@ -67,7 +101,16 @@ function init() {
   renderCart();
   loadCatalog();
   if (state.token) {
-    loadMyOrders();
+    bootstrapAuthenticatedSession();
+  }
+}
+
+async function bootstrapAuthenticatedSession() {
+  try {
+    await syncGuestCartToServer(true);
+    await Promise.all([loadServerCart(true), loadMyOrders()]);
+  } catch (error) {
+    showToast(error.message || "Could not restore your session", "error");
   }
 }
 
@@ -90,10 +133,24 @@ function cacheElements() {
     registerTabBtn: document.getElementById("registerTabBtn"),
     authForm: document.getElementById("authForm"),
     authSubmitBtn: document.getElementById("authSubmitBtn"),
+    resendOtpBtn: document.getElementById("resendOtpBtn"),
     authName: document.getElementById("authName"),
+    authIdentifier: document.getElementById("authIdentifier"),
     authEmail: document.getElementById("authEmail"),
+    authPhone: document.getElementById("authPhone"),
+    authEmailOtp: document.getElementById("authEmailOtp"),
+    authPhoneOtp: document.getElementById("authPhoneOtp"),
     authPassword: document.getElementById("authPassword"),
+    authConfirmPassword: document.getElementById("authConfirmPassword"),
+    registerStepHint: document.getElementById("registerStepHint"),
     nameFieldWrap: document.getElementById("nameFieldWrap"),
+    identifierFieldWrap: document.getElementById("identifierFieldWrap"),
+    emailFieldWrap: document.getElementById("emailFieldWrap"),
+    phoneFieldWrap: document.getElementById("phoneFieldWrap"),
+    emailOtpFieldWrap: document.getElementById("emailOtpFieldWrap"),
+    phoneOtpFieldWrap: document.getElementById("phoneOtpFieldWrap"),
+    passwordFieldWrap: document.getElementById("passwordFieldWrap"),
+    confirmPasswordFieldWrap: document.getElementById("confirmPasswordFieldWrap"),
 
     checkoutModal: document.getElementById("checkoutModal"),
     closeCheckoutBtn: document.getElementById("closeCheckoutBtn"),
@@ -104,9 +161,11 @@ function cacheElements() {
     checkoutPayment: document.getElementById("checkoutPayment"),
 
     topSearchInput: document.getElementById("topSearchInput"),
+    topSearchSuggestions: document.getElementById("topSearchSuggestions"),
     topSearchBtn: document.getElementById("topSearchBtn"),
     searchCategory: document.getElementById("searchCategory"),
     searchInput: document.getElementById("searchInput"),
+    filterSearchSuggestions: document.getElementById("filterSearchSuggestions"),
     clearSearchBtn: document.getElementById("clearSearchBtn"),
     quickFilterBar: document.getElementById("quickFilterBar"),
     sortSelect: document.getElementById("sortSelect"),
@@ -146,11 +205,15 @@ function bindEvents() {
 
   el.loginTabBtn.addEventListener("click", () => setAuthMode("login"));
   el.registerTabBtn.addEventListener("click", () => setAuthMode("register"));
+  el.resendOtpBtn.addEventListener("click", onResendOtp);
 
   el.authForm.addEventListener("submit", onAuthSubmit);
   el.checkoutForm.addEventListener("submit", onCheckoutSubmit);
 
   el.topSearchBtn.addEventListener("click", runSearchFromTop);
+  el.topSearchInput.addEventListener("input", () => {
+    scheduleSuggestions(el.topSearchInput, el.topSearchSuggestions);
+  });
   el.topSearchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -162,17 +225,21 @@ function bindEvents() {
     state.searchQuery = el.searchInput.value.trim();
     syncSearchInputs();
     applyFiltersAndRender();
+    scheduleSuggestions(el.searchInput, el.filterSearchSuggestions);
   });
 
   el.clearSearchBtn.addEventListener("click", () => {
     state.searchQuery = "";
     syncSearchInputs();
     applyFiltersAndRender();
+    hideSuggestionPanels();
+    scrollCatalogIntoView();
   });
 
   el.searchCategory.addEventListener("change", () => {
     state.searchCategory = el.searchCategory.value;
     applyFiltersAndRender();
+    scrollCatalogIntoView();
   });
 
   el.quickFilterBar.addEventListener("click", (event) => {
@@ -180,9 +247,10 @@ function bindEvents() {
     if (!btn) {
       return;
     }
-    state.activeFilter = btn.dataset.quickFilter;
+    selectQuickFilter(btn.dataset.quickFilter);
     updateActiveChip();
     applyFiltersAndRender();
+    scrollCatalogIntoView();
   });
 
   el.sortSelect.addEventListener("change", () => {
@@ -196,9 +264,19 @@ function bindEvents() {
   el.refreshOrdersBtn.addEventListener("click", loadMyOrders);
 
   document.body.addEventListener("click", (event) => {
+    const suggestionBtn = event.target.closest("[data-suggestion-title]");
+    if (suggestionBtn) {
+      selectSuggestion(suggestionBtn.dataset.suggestionTitle);
+      return;
+    }
+
+    if (!event.target.closest(".search-field-wrap")) {
+      hideSuggestionPanels();
+    }
+
     const addBtn = event.target.closest("[data-add-to-cart]");
     if (addBtn) {
-      addToCart(Number(addBtn.dataset.addToCart));
+      addToCart(Number(addBtn.dataset.addToCart)).catch((error) => handleApiError(error, "Could not update cart"));
       return;
     }
 
@@ -207,11 +285,11 @@ function bindEvents() {
       const bookId = Number(qtyBtn.dataset.bookId);
       const action = qtyBtn.dataset.qty;
       if (action === "inc") {
-        updateQty(bookId, 1);
+        updateQty(bookId, 1).catch((error) => handleApiError(error, "Could not update cart"));
       } else if (action === "dec") {
-        updateQty(bookId, -1);
+        updateQty(bookId, -1).catch((error) => handleApiError(error, "Could not update cart"));
       } else if (action === "remove") {
-        removeFromCart(bookId);
+        removeFromCart(bookId).catch((error) => handleApiError(error, "Could not update cart"));
       }
       return;
     }
@@ -227,13 +305,96 @@ function bindEvents() {
 function runSearchFromTop() {
   state.searchQuery = el.topSearchInput.value.trim();
   syncSearchInputs();
+  hideSuggestionPanels();
   applyFiltersAndRender();
-  document.getElementById("catalog").scrollIntoView({ behavior: "smooth", block: "start" });
+  scrollCatalogIntoView();
 }
 
 function syncSearchInputs() {
   el.topSearchInput.value = state.searchQuery;
   el.searchInput.value = state.searchQuery;
+}
+
+function scheduleSuggestions(input, panel) {
+  const query = input.value.trim();
+  clearTimeout(state.suggestionTimer);
+
+  if (query.length < 2) {
+    hideSuggestionPanel(panel);
+    return;
+  }
+
+  state.suggestionTimer = setTimeout(() => {
+    loadSuggestions(query, panel).catch(() => hideSuggestionPanel(panel));
+  }, 180);
+}
+
+async function loadSuggestions(query, panel) {
+  const requestId = ++state.suggestionRequestId;
+  const suggestions = await apiGet(
+    `${API.catalog}/api/products/suggestions?q=${encodeURIComponent(query)}&limit=8`
+  );
+
+  if (requestId !== state.suggestionRequestId) {
+    return;
+  }
+
+  renderSuggestions(panel, suggestions);
+}
+
+function renderSuggestions(panel, suggestions) {
+  if (!panel || !Array.isArray(suggestions) || suggestions.length === 0) {
+    hideSuggestionPanel(panel);
+    return;
+  }
+
+  panel.innerHTML = suggestions
+    .map(
+      (item) => `
+      <button class="suggestion-item" type="button" role="option" data-suggestion-title="${escapeAttr(item.title || "")}">
+        <span>
+          <strong>${escapeHtml(item.title || "Untitled")}</strong>
+          <span>by ${escapeHtml(item.author || "Unknown")}</span>
+        </span>
+        <em>${formatPrice(item.price || 0)}</em>
+      </button>
+    `
+    )
+    .join("");
+  panel.classList.remove("hidden");
+}
+
+function selectSuggestion(title) {
+  state.searchQuery = title || "";
+  syncSearchInputs();
+  hideSuggestionPanels();
+  applyFiltersAndRender();
+  scrollCatalogIntoView();
+}
+
+function scrollCatalogIntoView() {
+  const catalogSection = document.getElementById("catalog");
+  const header = document.querySelector(".site-header");
+  if (!catalogSection) {
+    return;
+  }
+
+  const headerOffset = header ? header.offsetHeight + 12 : 12;
+  const targetTop = Math.max(0, window.scrollY + catalogSection.getBoundingClientRect().top - headerOffset);
+  window.scrollTo({ top: targetTop, behavior: "smooth" });
+}
+
+function hideSuggestionPanels() {
+  hideSuggestionPanel(el.topSearchSuggestions);
+  hideSuggestionPanel(el.filterSearchSuggestions);
+}
+
+function hideSuggestionPanel(panel) {
+  if (!panel) {
+    return;
+  }
+  panel.classList.add("hidden");
+  panel.innerHTML = "";
 }
 
 function renderHero() {
@@ -320,14 +481,45 @@ function normalizeBooks(books) {
       description: book.description || "",
       price: Number(book.price || 0),
       stock: Number(book.stock || 0),
-      imageUrl: book.imageUrl || book.image_url || "",
-      isNewArrival: Boolean(book.isNewArrival),
-      isBestSeller: Boolean(book.isBestSeller),
+      imageUrl: resolveBookImageUrl(book),
+      isNewArrival: toBoolean(book.isNewArrival ?? book.newArrival ?? book.is_new_arrival),
+      isBestSeller: toBoolean(book.isBestSeller ?? book.bestSeller ?? book.is_best_seller),
     }));
+}
+
+function toBoolean(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value > 0;
+  }
+  if (typeof value === "string") {
+    return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
+  }
+  return false;
+}
+
+function resolveBookImageUrl(book) {
+  const direct = typeof book.imageUrl === "string" ? book.imageUrl.trim() : "";
+  if (direct) {
+    return direct;
+  }
+
+  const snake = typeof book.image_url === "string" ? book.image_url.trim() : "";
+  if (snake) {
+    return snake;
+  }
+
+  const id = Number(book.id || 0);
+  const idx = Math.abs(id) % DEFAULT_COVER_URLS.length;
+  return DEFAULT_COVER_URLS[idx];
 }
 
 function applyFiltersAndRender() {
   const query = state.searchQuery.toLowerCase();
+  const newArrivalIds = new Set(state.newArrivals.map((book) => book.id));
+  const bestSellerIds = new Set(state.bestSellers.map((book) => book.id));
 
   let books = state.books.filter((book) => {
     if (!query) {
@@ -345,13 +537,19 @@ function applyFiltersAndRender() {
     return `${book.title} ${book.author}`.toLowerCase().includes(query);
   });
 
-  if (state.activeFilter === "NEW") {
-    books = books.filter((book) => book.isNewArrival || state.newArrivals.some((item) => item.id === book.id));
-  } else if (state.activeFilter === "BEST") {
-    books = books.filter((book) => book.isBestSeller || state.bestSellers.some((item) => item.id === book.id));
-  } else if (state.activeFilter === "UNDER_400") {
+  if (state.activeFilters.has("NEW")) {
+    books = books.filter((book) => book.isNewArrival || newArrivalIds.has(book.id));
+  }
+
+  if (state.activeFilters.has("BEST")) {
+    books = books.filter((book) => book.isBestSeller || bestSellerIds.has(book.id));
+  }
+
+  if (state.activeFilters.has("UNDER_400")) {
     books = books.filter((book) => book.price <= 400);
-  } else if (state.activeFilter === "PREMIUM") {
+  }
+
+  if (state.activeFilters.has("PREMIUM")) {
     books = books.filter((book) => book.price > 600);
   }
 
@@ -365,6 +563,29 @@ function applyFiltersAndRender() {
 
   state.visibleBooks = books;
   renderBookList(el.catalogGrid, books, false);
+}
+
+function selectQuickFilter(filter) {
+  const selected = String(filter || "ALL").toUpperCase();
+  if (selected === "ALL") {
+    state.activeFilters.clear();
+    state.activeFilter = "ALL";
+    return;
+  }
+
+  if (selected === "UNDER_400") {
+    state.activeFilters.delete("PREMIUM");
+  } else if (selected === "PREMIUM") {
+    state.activeFilters.delete("UNDER_400");
+  }
+
+  if (state.activeFilters.has(selected)) {
+    state.activeFilters.delete(selected);
+  } else {
+    state.activeFilters.add(selected);
+  }
+
+  state.activeFilter = state.activeFilters.size === 0 ? "ALL" : selected;
 }
 
 function renderHeroHighlights() {
@@ -390,7 +611,7 @@ function renderBookList(container, books, compact) {
       const rating = 3.8 + ((book.id % 12) * 0.1);
       const stars = "★".repeat(Math.max(1, Math.round(rating)));
       const cover = book.imageUrl
-        ? `<img src="${escapeAttr(book.imageUrl)}" alt="${escapeAttr(book.title)}" />`
+        ? `<img src="${escapeAttr(book.imageUrl)}" alt="${escapeAttr(book.title)}" loading="lazy" referrerpolicy="no-referrer" data-book-title="${escapeAttr(book.title)}" />`
         : "";
 
       return `
@@ -409,16 +630,51 @@ function renderBookList(container, books, compact) {
       `;
     })
     .join("");
+
+  applyBrokenImageFallback(container);
+}
+
+function applyBrokenImageFallback(container) {
+  container.querySelectorAll(".cover-wrap img").forEach((img) => {
+    img.addEventListener(
+      "error",
+      () => {
+        const title = img.getAttribute("data-book-title") || "Book Cover";
+        img.src = buildSvgFallback(title);
+      },
+      { once: true }
+    );
+  });
+}
+
+function buildSvgFallback(title) {
+  const safeTitle = String(title).replace(/[<>]/g, "").slice(0, 28);
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="600" viewBox="0 0 420 600">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#4b5563"/>
+    </linearGradient>
+  </defs>
+  <rect width="420" height="600" fill="url(#g)"/>
+  <rect x="26" y="26" width="368" height="548" rx="14" fill="none" stroke="#e5e7eb" stroke-opacity="0.45"/>
+  <text x="210" y="270" text-anchor="middle" font-family="Source Sans 3, Arial" font-size="32" font-weight="700" fill="#f9fafb">Book Cover</text>
+  <text x="210" y="320" text-anchor="middle" font-family="Source Sans 3, Arial" font-size="22" fill="#e5e7eb">${safeTitle}</text>
+</svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 function updateActiveChip() {
   const chips = el.quickFilterBar.querySelectorAll(".chip");
   chips.forEach((chip) => {
-    chip.classList.toggle("active", chip.dataset.quickFilter === state.activeFilter);
+    const filter = String(chip.dataset.quickFilter || "ALL").toUpperCase();
+    const isActive = filter === "ALL" ? state.activeFilters.size === 0 : state.activeFilters.has(filter);
+    chip.classList.toggle("active", isActive);
   });
 }
 
-function addToCart(bookId) {
+async function addToCart(bookId) {
   const book = state.books.find((item) => item.id === bookId);
   if (!book) {
     showToast("Book not found", "error");
@@ -430,6 +686,18 @@ function addToCart(bookId) {
     return;
   }
 
+  if (state.token) {
+    const cart = await apiPost(
+      `${API.cart}/api/cart/items`,
+      { bookId, quantity: 1 },
+      withAuth()
+    );
+    state.cart = normalizeCartItems(cart);
+    renderCart();
+    showToast(`${book.title} added to cart`);
+    return;
+  }
+
   const existing = state.cart.find((item) => item.id === bookId);
   if (existing) {
     if (existing.quantity >= book.stock) {
@@ -437,18 +705,44 @@ function addToCart(bookId) {
       return;
     }
     existing.quantity += 1;
+    existing.lineTotal = existing.quantity * existing.price;
   } else {
-    state.cart.push({ id: book.id, title: book.title, price: book.price, quantity: 1 });
+    state.cart.push({
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      imageUrl: book.imageUrl,
+      price: book.price,
+      quantity: 1,
+      lineTotal: book.price,
+    });
   }
 
-  persistCart();
+  persistGuestCart();
   renderCart();
   showToast(`${book.title} added to cart`);
 }
 
-function updateQty(bookId, change) {
+async function updateQty(bookId, change) {
   const item = state.cart.find((entry) => entry.id === bookId);
   if (!item) {
+    return;
+  }
+
+  if (state.token) {
+    const nextQuantity = item.quantity + change;
+    if (nextQuantity <= 0) {
+      await removeFromCart(bookId);
+      return;
+    }
+
+    const cart = await apiPatch(
+      `${API.cart}/api/cart/items/${bookId}`,
+      { quantity: nextQuantity },
+      withAuth()
+    );
+    state.cart = normalizeCartItems(cart);
+    renderCart();
     return;
   }
 
@@ -457,7 +751,7 @@ function updateQty(bookId, change) {
 
   item.quantity += change;
   if (item.quantity <= 0) {
-    removeFromCart(bookId);
+    await removeFromCart(bookId);
     return;
   }
 
@@ -466,13 +760,21 @@ function updateQty(bookId, change) {
     showToast("Reached available stock", "error");
   }
 
-  persistCart();
+  item.lineTotal = item.quantity * item.price;
+  persistGuestCart();
   renderCart();
 }
 
-function removeFromCart(bookId) {
+async function removeFromCart(bookId) {
+  if (state.token) {
+    const cart = await apiDelete(`${API.cart}/api/cart/items/${bookId}`, withAuth());
+    state.cart = normalizeCartItems(cart);
+    renderCart();
+    return;
+  }
+
   state.cart = state.cart.filter((entry) => entry.id !== bookId);
-  persistCart();
+  persistGuestCart();
   renderCart();
 }
 
@@ -546,52 +848,252 @@ function isAnyModalOpen() {
 }
 
 function setAuthMode(mode) {
+  const wasRegister = state.mode === "register";
   state.mode = mode;
-  const isRegister = mode === "register";
 
-  el.nameFieldWrap.classList.toggle("hidden", !isRegister);
-  el.loginTabBtn.classList.toggle("active", !isRegister);
+  if (mode === "register" && !wasRegister) {
+    resetRegistrationFlow(false);
+  }
+
+  const isLogin = mode === "login";
+  const isRegister = mode === "register";
+  const isRegisterStep1 = isRegister && state.registerStep === 1;
+  const isRegisterStep2 = isRegister && state.registerStep === 2;
+
+  el.loginTabBtn.classList.toggle("active", isLogin);
   el.registerTabBtn.classList.toggle("active", isRegister);
-  el.authSubmitBtn.textContent = isRegister ? "Create Account" : "Login";
+
+  el.identifierFieldWrap.classList.toggle("hidden", !isLogin);
+  el.nameFieldWrap.classList.toggle("hidden", !isRegisterStep1);
+  el.phoneFieldWrap.classList.toggle("hidden", !isRegisterStep1);
+  el.phoneOtpFieldWrap.classList.toggle("hidden", !isRegisterStep1);
+
+  el.emailFieldWrap.classList.toggle("hidden", !isRegisterStep2);
+  el.emailOtpFieldWrap.classList.toggle("hidden", !isRegisterStep2);
+  el.passwordFieldWrap.classList.toggle("hidden", !(isLogin || isRegisterStep2));
+  el.confirmPasswordFieldWrap.classList.toggle("hidden", !isRegisterStep2);
+  el.resendOtpBtn.classList.toggle("hidden", !isRegister);
+
+  el.registerStepHint.classList.toggle("hidden", !isRegister);
+  if (isRegisterStep1) {
+    el.registerStepHint.textContent = "Step 1 of 2: Full Name, Phone, Phone OTP";
+  } else if (isRegisterStep2) {
+    el.registerStepHint.textContent = "Step 2 of 2: Email, Email OTP, Password, Confirm Password";
+  }
+
+  if (isLogin) {
+    el.authSubmitBtn.textContent = "Sign In";
+  } else if (isRegisterStep1) {
+    el.authSubmitBtn.textContent = "Verify Phone & Continue";
+    el.resendOtpBtn.textContent = state.phoneOtpSent ? "Resend Phone OTP" : "Send Phone OTP";
+  } else {
+    el.authSubmitBtn.textContent = "Create Account";
+    el.resendOtpBtn.textContent = state.emailOtpSent ? "Resend Email OTP" : "Send Email OTP";
+  }
+}
+
+function resetRegistrationFlow(clearInputs) {
+  state.registerStep = 1;
+  state.registrationId = "";
+  state.phoneOtpSent = false;
+  state.emailOtpSent = false;
+  state.phoneVerified = false;
+
+  if (!clearInputs) {
+    return;
+  }
+
+  el.authName.value = "";
+  el.authPhone.value = "";
+  el.authPhoneOtp.value = "";
+  el.authEmail.value = "";
+  el.authEmailOtp.value = "";
+  el.authPassword.value = "";
+  el.authConfirmPassword.value = "";
+}
+
+async function saveAuthSuccess(response, fallbackName) {
+  state.token = response.token;
+  state.user = {
+    ...(state.user || {}),
+    name: fallbackName || state.user?.name,
+    loginId: response.loginId || response.email,
+    email: response.email,
+    role: response.role,
+  };
+  resetRegistrationFlow(true);
+
+  persistSession();
+  refreshSessionUI();
+  closeAllOverlays();
+  el.authForm.reset();
+  setAuthMode("login");
+  await syncGuestCartToServer(true);
+  await Promise.all([loadServerCart(true), loadMyOrders()]);
+}
+
+function normalizePhoneOrNull(value) {
+  const normalized = normalizeIndianPhone(value || "");
+  return normalized || null;
+}
+
+async function sendPhoneOtp() {
+  const name = el.authName.value.trim();
+  const phoneNumber = normalizePhoneOrNull(el.authPhone.value.trim());
+
+  if (!name) {
+    showToast("Full name is required", "error");
+    return;
+  }
+
+  if (!phoneNumber) {
+    showToast("Valid Indian phone number is required", "error");
+    return;
+  }
+
+  const response = await authPost("/register/phone/start", {
+    name,
+    phoneNumber,
+  });
+
+  state.registrationId = response.registrationId || "";
+  state.phoneOtpSent = true;
+  state.phoneVerified = false;
+  state.emailOtpSent = false;
+  state.registerStep = 1;
+  if (response.debugPhoneOtp) {
+    el.authPhoneOtp.value = response.debugPhoneOtp;
+  }
+  setAuthMode("register");
+  showToast(response.message || "Phone OTP sent");
+}
+
+async function verifyPhoneAndContinue() {
+  if (!state.registrationId) {
+    showToast("Send phone OTP first", "error");
+    return;
+  }
+
+  const phoneOtpCode = el.authPhoneOtp.value.trim();
+  if (!phoneOtpCode) {
+    showToast("Phone OTP is required", "error");
+    return;
+  }
+
+  const response = await authPost("/register/phone/verify", {
+    registrationId: state.registrationId,
+    otpCode: phoneOtpCode,
+  });
+
+  state.phoneVerified = true;
+  state.registerStep = 2;
+  setAuthMode("register");
+  showToast(response.message || "Phone verified");
+}
+
+async function sendEmailOtp() {
+  if (!state.registrationId || !state.phoneVerified || state.registerStep !== 2) {
+    showToast("Verify phone OTP first", "error");
+    return;
+  }
+
+  const email = el.authEmail.value.trim();
+  if (!email) {
+    showToast("Email is required", "error");
+    return;
+  }
+
+  const response = await authPost("/register/email/send-otp", {
+    registrationId: state.registrationId,
+    email,
+  });
+
+  state.emailOtpSent = true;
+  if (response.debugEmailOtp) {
+    el.authEmailOtp.value = response.debugEmailOtp;
+  }
+  setAuthMode("register");
+  showToast(response.message || "Email OTP sent");
+}
+
+async function loginWithPassword() {
+  const identifier = el.authIdentifier.value.trim();
+  const password = el.authPassword.value.trim();
+  if (!identifier || !password) {
+    showToast("Email/phone and password are required", "error");
+    return;
+  }
+
+  const response = await authPost("/login", { identifier, password });
+  await saveAuthSuccess(response, state.user?.name);
+  showToast("Logged in successfully");
+}
+
+async function completeRegistration() {
+  if (!state.registrationId || state.registerStep !== 2) {
+    showToast("Complete phone step first", "error");
+    return;
+  }
+
+  const email = el.authEmail.value.trim();
+  const emailOtpCode = el.authEmailOtp.value.trim();
+  const password = el.authPassword.value.trim();
+  const confirmPassword = el.authConfirmPassword.value.trim();
+  const name = el.authName.value.trim();
+
+  if (!email || !emailOtpCode || !password || !confirmPassword) {
+    showToast("Fill email, email OTP, password and confirm password", "error");
+    return;
+  }
+
+  const response = await authPost("/register/complete", {
+    registrationId: state.registrationId,
+    email,
+    emailOtpCode,
+    password,
+    confirmPassword,
+  });
+
+  await saveAuthSuccess(response, name);
+  showToast("Account created successfully");
 }
 
 async function onAuthSubmit(event) {
   event.preventDefault();
 
-  const email = el.authEmail.value.trim();
-  const password = el.authPassword.value.trim();
-
   try {
-    let response;
     if (state.mode === "register") {
-      const name = el.authName.value.trim();
-      if (!name) {
-        showToast("Name is required", "error");
-        return;
+      if (state.registerStep === 1) {
+        if (!state.registrationId) {
+          await sendPhoneOtp();
+          return;
+        }
+        await verifyPhoneAndContinue();
+      } else {
+        await completeRegistration();
       }
-
-      response = await apiPost(`${API.auth}/api/auth/register`, {
-        name,
-        email,
-        password,
-        role: "CUSTOMER",
-      });
-
-      state.user = { email: response.email, role: response.role, name };
-    } else {
-      response = await apiPost(`${API.auth}/api/auth/login`, { email, password });
-      state.user = { ...(state.user || {}), email: response.email, role: response.role };
+      return;
     }
 
-    state.token = response.token;
-    persistSession();
-    refreshSessionUI();
-    closeAllOverlays();
-    el.authForm.reset();
-    showToast(state.mode === "register" ? "Registered successfully" : "Logged in successfully");
-    loadMyOrders();
+    await loginWithPassword();
   } catch (error) {
     showToast(error.message || "Authentication failed", "error");
+  }
+}
+
+async function onResendOtp() {
+  if (state.mode !== "register") {
+    return;
+  }
+
+  try {
+    if (state.registerStep === 1) {
+      await sendPhoneOtp();
+      return;
+    }
+    await sendEmailOtp();
+  } catch (error) {
+    showToast(error.message || "Could not send OTP", "error");
   }
 }
 
@@ -609,6 +1111,8 @@ function onCheckoutClick() {
 
   if (state.user?.name) {
     el.checkoutName.value = state.user.name;
+  } else if (state.user?.loginId) {
+    el.checkoutName.value = state.user.loginId.split("@")[0];
   } else if (state.user?.email) {
     el.checkoutName.value = state.user.email.split("@")[0];
   }
@@ -619,17 +1123,13 @@ function onCheckoutClick() {
 async function onCheckoutSubmit(event) {
   event.preventDefault();
 
+  const phone = normalizePhoneOrNull(el.checkoutPhone.value.trim());
   const payload = {
+    orderRequestId: buildOrderRequestId(),
     customerName: el.checkoutName.value.trim(),
-    phone: el.checkoutPhone.value.trim(),
+    phone,
     address: el.checkoutAddress.value.trim(),
     paymentMethod: el.checkoutPayment.value,
-    items: state.cart.map((item) => ({
-      bookId: item.id,
-      title: item.title,
-      quantity: item.quantity,
-      unitPrice: item.price,
-    })),
   };
 
   if (!payload.customerName || !payload.phone || !payload.address) {
@@ -639,9 +1139,7 @@ async function onCheckoutSubmit(event) {
 
   try {
     const order = await apiPost(`${API.order}/api/orders`, payload, withAuth());
-    state.cart = [];
-    persistCart();
-    renderCart();
+    await loadServerCart(true);
     closeAllOverlays();
     showToast(`Order #${order.id} placed successfully`);
     await loadMyOrders();
@@ -705,7 +1203,8 @@ function renderOrders() {
 
 function refreshSessionUI() {
   if (state.token) {
-    const label = state.user?.email ? `Logout (${state.user.email})` : "Logout";
+    const loginId = state.user?.loginId || state.user?.email;
+    const label = loginId ? `Logout (${loginId})` : "Logout";
     el.authActionBtn.textContent = label;
   } else {
     el.authActionBtn.textContent = "Hello, Sign in";
@@ -716,17 +1215,20 @@ function logout() {
   state.token = "";
   state.user = null;
   state.orders = [];
+  state.cart = normalizeCartItems(readJsonFromStorage(STORAGE_KEYS.cart, []));
+  resetRegistrationFlow(true);
 
   localStorage.removeItem(STORAGE_KEYS.token);
   localStorage.removeItem(STORAGE_KEYS.user);
 
   refreshSessionUI();
+  renderCart();
   renderOrders();
   closeAllOverlays();
   showToast("Logged out");
 }
 
-function persistCart() {
+function persistGuestCart() {
   localStorage.setItem(STORAGE_KEYS.cart, JSON.stringify(state.cart));
 }
 
@@ -753,6 +1255,45 @@ async function apiPost(url, body, headers = {}) {
     headers,
     body: JSON.stringify(body),
   });
+}
+
+async function apiPatch(url, body, headers = {}) {
+  return request(url, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+async function apiDelete(url, headers = {}) {
+  return request(url, {
+    method: "DELETE",
+    headers,
+  });
+}
+
+async function authPost(path, body) {
+  const preferred = AUTH_PATHS.includes(state.authPath) ? state.authPath : AUTH_PATHS[0];
+  const candidates = [preferred, ...AUTH_PATHS.filter((p) => p !== preferred)];
+
+  let lastError = null;
+  for (const basePath of candidates) {
+    try {
+      const response = await apiPost(`${API.auth}${basePath}${path}`, body);
+      if (state.authPath !== basePath) {
+        state.authPath = basePath;
+        localStorage.setItem(STORAGE_KEYS.authPath, basePath);
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (error.status !== 403 && error.status !== 404) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error("Auth service is not reachable");
 }
 
 async function request(url, options = {}) {
@@ -788,6 +1329,92 @@ async function request(url, options = {}) {
   return data;
 }
 
+function normalizeCartItems(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) => ({
+    id: Number(item.bookId ?? item.id ?? 0),
+    title: item.title || "Untitled",
+    author: item.author || "Unknown",
+    imageUrl: item.imageUrl || "",
+    price: Number(item.unitPrice ?? item.price ?? 0),
+    quantity: Number(item.quantity || 0),
+    lineTotal: Number(item.lineTotal ?? (Number(item.unitPrice ?? item.price ?? 0) * Number(item.quantity || 0))),
+  }));
+}
+
+async function loadServerCart(silent = false) {
+  if (!state.token) {
+    return [];
+  }
+
+  try {
+    const cart = await apiGet(`${API.cart}/api/cart`, withAuth());
+    state.cart = normalizeCartItems(cart);
+    renderCart();
+    return state.cart;
+  } catch (error) {
+    if (error.status === 401) {
+      logout();
+      return [];
+    }
+    if (!silent) {
+      throw error;
+    }
+    return [];
+  }
+}
+
+async function syncGuestCartToServer(silent = false) {
+  if (!state.token) {
+    return;
+  }
+
+  const pendingItems = normalizeCartItems(readJsonFromStorage(STORAGE_KEYS.cart, []));
+  if (pendingItems.length === 0) {
+    return;
+  }
+
+  const failedItems = [];
+  for (const item of pendingItems) {
+    try {
+      await apiPost(
+        `${API.cart}/api/cart/items`,
+        { bookId: item.id, quantity: item.quantity },
+        withAuth()
+      );
+    } catch (error) {
+      if (error.status === 401) {
+        logout();
+        return;
+      }
+      failedItems.push(item);
+    }
+  }
+
+  localStorage.setItem(STORAGE_KEYS.cart, JSON.stringify(failedItems));
+  if (failedItems.length > 0 && !silent) {
+    showToast("Some guest cart items could not be synced", "error");
+  }
+}
+
+function handleApiError(error, fallbackMessage) {
+  if (error.status === 401) {
+    logout();
+    return;
+  }
+  showToast(error.message || fallbackMessage, "error");
+}
+
+function buildOrderRequestId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `order-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
 let toastTimer;
 function showToast(message, type = "success") {
   el.toast.textContent = message;
@@ -808,4 +1435,20 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value).replace(/`/g, "");
+}
+
+function normalizeIndianPhone(value) {
+  if (!value) {
+    return null;
+  }
+
+  let digits = String(value).replace(/[^\d]/g, "");
+  if (digits.length === 11 && digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  if (digits.length === 12 && digits.startsWith("91")) {
+    digits = digits.slice(2);
+  }
+
+  return /^[6-9]\d{9}$/.test(digits) ? digits : null;
 }

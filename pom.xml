@@ -9,9 +9,13 @@
     <packaging>pom</packaging>
 
     <modules>
+        <module>bookstore-events</module>
         <module>auth-service</module>
         <module>catalog-service</module>
+        <module>cart-service</module>
         <module>order-service</module>
+        <module>payment-service</module>
+        <module>buyback-service</module>
         <module>enterprise-bookstore</module>
     </modules>
 

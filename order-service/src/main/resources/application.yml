@@ -1,6 +1,17 @@
 server:
   port: 8083
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/order_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
@@ -10,7 +21,19 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
-
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 app:
   jwt:
-    secret: 01234567890123456789012345678901
+    secret: ${APP_JWT_SECRET:msrbooknest-demo-signing-key-change-me}
+  web-origins: ${APP_WEB_ORIGINS:http://localhost:5173}
+  services:
+    catalog-base-url: ${CATALOG_SERVICE_BASE_URL:http://localhost:8082}
+    cart-base-url: ${CART_SERVICE_BASE_URL:http://localhost:8084}

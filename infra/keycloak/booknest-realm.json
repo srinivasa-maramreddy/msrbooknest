@@ -1,0 +1,50 @@
+{
+  "realm": "booknest",
+  "enabled": true,
+  "displayName": "msrbooknest",
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "registrationEmailAsUsername": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "verifyEmail": true,
+  "passwordPolicy": "length(10) and specialChars(1)",
+  "loginTheme": "msrbooknest",
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "no-reply@msrbooknest.local",
+    "fromDisplayName": "msrbooknest",
+    "auth": "false",
+    "ssl": "false",
+    "starttls": "false"
+  },
+  "roles": {
+    "realm": [
+      { "name": "CUSTOMER", "description": "msrbooknest customer" },
+      { "name": "ADMIN", "description": "msrbooknest administrator" }
+    ]
+  },
+  "defaultRoles": ["CUSTOMER"],
+  "clients": [
+    {
+      "clientId": "booknest-web",
+      "name": "msrbooknest customer web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "defaultClientScopes": ["web-origins", "acr", "roles", "profile", "email"]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# Customer Web UI (BookNest)
+# Customer Web UI (msrbooknest)
 
 A customer-facing bookstore website connected to your Spring Boot microservices.
 

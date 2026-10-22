@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BookNest India | Book Shopping</title>
+  <title>msrbooknest | Book Shopping</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -12,7 +12,7 @@
 <body>
   <header class="site-header">
     <div class="header-main">
-      <a class="logo" href="#">booknest<span>.in</span></a>
+      <a class="logo" href="#">msrbooknest</a>
 
       <div class="deliver-pill">
         <span class="small">Deliver to</span>
@@ -25,7 +25,10 @@
           <option value="title">Title</option>
           <option value="author">Author</option>
         </select>
-        <input id="topSearchInput" type="text" placeholder="Search BookNest" />
+        <div class="search-field-wrap">
+          <input id="topSearchInput" type="text" placeholder="Search msrbooknest" autocomplete="off" />
+          <div id="topSearchSuggestions" class="suggestions-panel hidden" role="listbox"></div>
+        </div>
         <button id="topSearchBtn" aria-label="Search">Search</button>
       </div>
 
@@ -80,15 +83,18 @@
       <aside class="filters-panel">
         <h3>Filters</h3>
         <label class="field-label" for="searchInput">Search books</label>
-        <input id="searchInput" type="text" placeholder="Type title or author" />
+        <div class="search-field-wrap side-search-wrap">
+          <input id="searchInput" type="text" placeholder="Type title or author" autocomplete="off" />
+          <div id="filterSearchSuggestions" class="suggestions-panel hidden" role="listbox"></div>
+        </div>
         <button id="clearSearchBtn" class="btn btn-light">Clear Search</button>
 
         <div id="quickFilterBar" class="chip-list">
-          <button class="chip active" data-quick-filter="ALL">All</button>
-          <button class="chip" data-quick-filter="NEW">New Arrivals</button>
-          <button class="chip" data-quick-filter="BEST">Best Sellers</button>
-          <button class="chip" data-quick-filter="UNDER_400">Under Rs 400</button>
-          <button class="chip" data-quick-filter="PREMIUM">Premium</button>
+          <button type="button" class="chip active" data-quick-filter="ALL">All</button>
+          <button type="button" class="chip" data-quick-filter="NEW">New Arrivals</button>
+          <button type="button" class="chip" data-quick-filter="BEST">Best Sellers</button>
+          <button type="button" class="chip" data-quick-filter="UNDER_400">Under Rs 400</button>
+          <button type="button" class="chip" data-quick-filter="PREMIUM">Premium</button>
         </div>
 
         <div class="stats-grid">
@@ -169,16 +175,40 @@
         <button id="registerTabBtn" class="tab">Register</button>
       </div>
       <form id="authForm" class="modal-form">
+        <div id="registerStepHint" class="hidden"></div>
+
         <label id="nameFieldWrap" class="hidden">Full Name
           <input id="authName" type="text" placeholder="Your name" />
         </label>
-        <label>Email
-          <input id="authEmail" type="email" required placeholder="you@example.com" />
+
+        <label id="identifierFieldWrap">Email or Phone
+          <input id="authIdentifier" type="text" placeholder="Email or phone number" />
         </label>
-        <label>Password
-          <input id="authPassword" type="password" required placeholder="Password" />
+
+        <label id="phoneFieldWrap" class="hidden">Phone
+          <input id="authPhone" type="text" placeholder="Indian mobile: 9876543210 or +919876543210" />
+        </label>
+
+        <label id="phoneOtpFieldWrap" class="hidden">Phone OTP
+          <input id="authPhoneOtp" type="text" placeholder="Enter phone OTP" />
+        </label>
+
+        <label id="emailFieldWrap" class="hidden">Email
+          <input id="authEmail" type="email" placeholder="you@example.com" />
+        </label>
+
+        <label id="emailOtpFieldWrap" class="hidden">Email OTP
+          <input id="authEmailOtp" type="text" placeholder="Enter email OTP" />
+        </label>
+
+        <label id="passwordFieldWrap">Password
+          <input id="authPassword" type="password" placeholder="Password" />
+        </label>
+        <label id="confirmPasswordFieldWrap" class="hidden">Confirm Password
+          <input id="authConfirmPassword" type="password" placeholder="Confirm password" />
         </label>
         <button id="authSubmitBtn" class="btn btn-primary btn-full" type="submit">Login</button>
+        <button id="resendOtpBtn" class="btn btn-light btn-full hidden" type="button">Send OTP</button>
       </form>
     </div>
   </section>
@@ -213,6 +243,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=20260410-1"></script>
 </body>
 </html>

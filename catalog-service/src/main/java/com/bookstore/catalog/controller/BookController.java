@@ -1,14 +1,18 @@
 package com.bookstore.catalog.controller;
 
+import com.bookstore.catalog.dto.InventoryDeductRequest;
+import com.bookstore.catalog.dto.InventoryQuoteRequest;
+import com.bookstore.catalog.dto.InventoryReservationRequest;
 import com.bookstore.catalog.entity.Book;
 import com.bookstore.catalog.service.BookService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
-@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/books")
 public class BookController {
@@ -26,6 +30,15 @@ public class BookController {
         return ResponseEntity.ok(bookService.getAll());
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<?> byId(@PathVariable("id") Long id) {
+        try {
+            return ResponseEntity.ok(bookService.getById(id));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
     @GetMapping("/new-arrivals")
     public ResponseEntity<?> newArrivals() {
         return ResponseEntity.ok(bookService.getNewArrivals());
@@ -34,6 +47,33 @@ public class BookController {
     @GetMapping("/best-sellers")
     public ResponseEntity<?> bestSellers() {
         return ResponseEntity.ok(bookService.getBestSellers());
+    }
+
+    @PostMapping("/inventory/quote")
+    public ResponseEntity<?> quoteInventory(@RequestBody InventoryQuoteRequest request) {
+        try {
+            return ResponseEntity.ok(bookService.quoteInventory(request));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/inventory/deduct")
+    public ResponseEntity<?> deductInventory(@RequestBody InventoryDeductRequest request) {
+        try {
+            return ResponseEntity.ok(bookService.deductInventory(request));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/inventory/reservations")
+    public ResponseEntity<?> reserveInventory(@RequestBody InventoryReservationRequest request) {
+        try {
+            return ResponseEntity.ok(bookService.reserveInventory(request));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
     }
 
     @PostMapping
@@ -66,7 +106,8 @@ public class BookController {
     }
 
     private boolean isAdmin(HttpServletRequest request) {
-        Object role = request.getAttribute("userRole");
-        return role != null && "ADMIN".equalsIgnoreCase(role.toString());
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 }

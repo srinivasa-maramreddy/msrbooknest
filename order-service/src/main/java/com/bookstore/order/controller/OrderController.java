@@ -3,12 +3,14 @@ package com.bookstore.order.controller;
 import com.bookstore.order.dto.PlaceOrderRequest;
 import com.bookstore.order.service.OrderService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
-@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
@@ -24,9 +26,10 @@ public class OrderController {
         if (email == null) {
             return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
         }
+        String authorizationHeader = httpRequest.getHeader("Authorization");
 
         try {
-            return ResponseEntity.ok(orderService.place(email, request));
+            return ResponseEntity.ok(orderService.place(email, authorizationHeader, request));
         } catch (RuntimeException ex) {
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
         }
@@ -62,12 +65,18 @@ public class OrderController {
     }
 
     private String getEmail(HttpServletRequest request) {
-        Object email = request.getAttribute("userEmail");
-        return email == null ? null : email.toString();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) return null;
+        if (authentication.getPrincipal() instanceof Jwt jwt) {
+            String email = jwt.getClaimAsString("email");
+            return email == null || email.isBlank() ? jwt.getSubject() : email;
+        }
+        return authentication.getName();
     }
 
     private boolean isAdmin(HttpServletRequest request) {
-        Object role = request.getAttribute("userRole");
-        return role != null && "ADMIN".equalsIgnoreCase(role.toString());
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 }

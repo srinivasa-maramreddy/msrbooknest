@@ -1,8 +1,16 @@
 package com.bookstore.auth.controller;
 
 import com.bookstore.auth.dto.AuthResponse;
+import com.bookstore.auth.dto.DemoRegisterRequest;
 import com.bookstore.auth.dto.LoginRequest;
-import com.bookstore.auth.dto.RegisterRequest;
+import com.bookstore.auth.dto.PasswordForgotRequest;
+import com.bookstore.auth.dto.PasswordRecoveryResponse;
+import com.bookstore.auth.dto.PasswordResetRequest;
+import com.bookstore.auth.dto.RegisterCompleteRequest;
+import com.bookstore.auth.dto.RegisterEmailOtpRequest;
+import com.bookstore.auth.dto.RegisterPhoneStartRequest;
+import com.bookstore.auth.dto.RegisterPhoneVerifyRequest;
+import com.bookstore.auth.dto.RegistrationStepResponse;
 import com.bookstore.auth.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -12,7 +20,7 @@ import java.util.Map;
 
 @CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/auth"})
 public class AuthController {
     private final AuthService authService;
 
@@ -20,10 +28,40 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
+    @PostMapping("/register/phone/start")
+    public ResponseEntity<?> startPhoneRegistration(@Valid @RequestBody RegisterPhoneStartRequest request) {
         try {
-            AuthResponse response = authService.register(request);
+            RegistrationStepResponse response = authService.startPhoneRegistration(request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/register/phone/verify")
+    public ResponseEntity<?> verifyPhoneRegistration(@Valid @RequestBody RegisterPhoneVerifyRequest request) {
+        try {
+            RegistrationStepResponse response = authService.verifyPhoneRegistration(request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/register/email/send-otp")
+    public ResponseEntity<?> sendEmailRegistrationOtp(@Valid @RequestBody RegisterEmailOtpRequest request) {
+        try {
+            RegistrationStepResponse response = authService.sendEmailRegistrationOtp(request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/register/complete")
+    public ResponseEntity<?> completeRegistration(@Valid @RequestBody RegisterCompleteRequest request) {
+        try {
+            AuthResponse response = authService.completeRegistration(request);
             return ResponseEntity.ok(response);
         } catch (RuntimeException ex) {
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
@@ -37,6 +75,34 @@ public class AuthController {
             return ResponseEntity.ok(response);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(401).body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/password/forgot")
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody PasswordForgotRequest request) {
+        try {
+            return ResponseEntity.ok(authService.startPasswordRecovery(request));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/password/reset")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
+        try {
+            authService.resetPassword(request);
+            return ResponseEntity.ok(Map.of("message", "Password changed. You can now sign in with your new password."));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/demo/register")
+    public ResponseEntity<?> registerDemo(@Valid @RequestBody DemoRegisterRequest request) {
+        try {
+            return ResponseEntity.ok(authService.registerDemo(request));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.bookstore.order.entity;
 
+import java.math.BigDecimal;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 
@@ -13,7 +15,8 @@ public class OrderItem {
     private Long bookId;
     private String title;
     private Integer quantity;
-    private Double unitPrice;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal unitPrice;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
@@ -24,13 +27,13 @@ public class OrderItem {
     public Long getBookId() { return bookId; }
     public String getTitle() { return title; }
     public Integer getQuantity() { return quantity; }
-    public Double getUnitPrice() { return unitPrice; }
+    public BigDecimal getUnitPrice() { return unitPrice; }
     public Order getOrder() { return order; }
 
     public void setId(Long id) { this.id = id; }
     public void setBookId(Long bookId) { this.bookId = bookId; }
     public void setTitle(String title) { this.title = title; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
-    public void setUnitPrice(Double unitPrice) { this.unitPrice = unitPrice; }
+    public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
     public void setOrder(Order order) { this.order = order; }
 }

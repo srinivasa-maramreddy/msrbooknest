@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Amazon Cognito OIDC user pool and SES email identity for msrbooknest.
+
+Parameters:
+  SenderEmail:
+    Type: String
+    Default: srinivasareddy.jobs@gmail.com
+    Description: Verified SES sender address. SES will email this address a verification link.
+  CognitoDomainPrefix:
+    Type: String
+    Description: Globally unique Cognito hosted-login prefix for this AWS Region.
+    AllowedPattern: '^[a-z0-9-]+$'
+    MinLength: 4
+    MaxLength: 63
+
+Resources:
+  SenderIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref SenderEmail
+
+  BooknestUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: msrbooknest-users
+      UsernameAttributes:
+        - email
+        - phone_number
+      AutoVerifiedAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: phone_number
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: name
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 10
+          RequireUppercase: false
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 7
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      EmailConfiguration:
+        EmailSendingAccount: DEVELOPER
+        From: !Sub 'msrbooknest <${SenderEmail}>'
+        SourceArn: !Sub 'arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}'
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailSubject: 'Verify your msrbooknest email'
+        EmailMessage: 'Your msrbooknest verification code is {####}.'
+
+  BooknestAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: msrbooknest-web
+      UserPoolId: !Ref BooknestUserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - phone
+        - profile
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - http://localhost:5173
+      LogoutURLs:
+        - http://localhost:5173
+      ReadAttributes:
+        - email
+        - email_verified
+        - phone_number
+        - phone_number_verified
+        - name
+      WriteAttributes:
+        - email
+        - phone_number
+        - name
+
+  BooknestLoginDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref BooknestUserPool
+
+  BooknestAdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: ADMIN
+      Description: Store operators with catalog and order administration access.
+      Precedence: 1
+      UserPoolId: !Ref BooknestUserPool
+
+Outputs:
+  UserPoolId:
+    Value: !Ref BooknestUserPool
+  AppClientId:
+    Value: !Ref BooknestAppClient
+  IssuerUri:
+    Value: !Sub 'https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${BooknestUserPool}'
+  HostedUiDomain:
+    Value: !Sub 'https://${CognitoDomainPrefix}.auth.${AWS::Region}.${AWS::URLSuffix}'
+  SesSenderIdentityArn:
+    Value: !Sub 'arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmail}'
