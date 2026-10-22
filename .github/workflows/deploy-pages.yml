@@ -47,7 +47,7 @@ jobs:
       - name: Build the public browser demo
         working-directory: customer-web-react
         env:
-          VITE_BASE_PATH: /Srinivas/
+          VITE_BASE_PATH: /msrbooknest/
           VITE_DEMO_MODE: "true"
         run: pnpm build
 
