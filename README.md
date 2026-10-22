@@ -19,7 +19,7 @@ For a guided interview walkthrough, seeded account details, API links, troublesh
 
 ## Public browser demo
 
-The React storefront is published with GitHub Pages at <https://srinivasmaram8.github.io/msrbooknest/>. The Pages build uses a browser-only mock adapter, so sample catalog, cart, checkout, account, and used-book buyback actions are saved in that browser. No real email/SMS, courier, or payment is sent. The Spring Boot services, MySQL, and Kafka remain available through the local Docker Compose demo above; GitHub Pages does not run those services.
+The React storefront is published with GitHub Pages at <https://srinivasa-maramreddy.github.io/msrbooknest/>. The Pages build uses a browser-only mock adapter, so sample catalog, cart, checkout, account, and used-book buyback actions are saved in that browser. No real email/SMS, courier, or payment is sent. The Spring Boot services, MySQL, and Kafka remain available through the local Docker Compose demo above; GitHub Pages does not run those services.
 
 Demo sign-in:
 
