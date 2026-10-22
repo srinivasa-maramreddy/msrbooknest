@@ -1051,6 +1051,7 @@ function App() {
           <div className="nav-drawer-footer">
             <button className="nav-sell-link" type="button" onClick={() => { setNavigationOpen(false); openBuyback(); }}><span>Sell a book</span><span aria-hidden="true">↗</span></button>
             <button className="nav-orders-link" type="button" onClick={() => { setNavigationOpen(false); setBuybackView(false); setAdminOpen(false); window.setTimeout(() => document.getElementById("orders")?.scrollIntoView({ behavior: "smooth" }), 0); }}>Orders &amp; deliveries<span aria-hidden="true">→</span></button>
+            {user && <button className="nav-sign-out-link" type="button" onClick={() => { setNavigationOpen(false); signOut(); }}>Sign out<span aria-hidden="true">↪</span></button>}
           </div>
         </aside>
       </div>}

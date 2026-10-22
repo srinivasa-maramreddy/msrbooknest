@@ -949,6 +949,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .nav-sell-link:hover { background: #f3ca3e; }
 .nav-orders-link { min-height: 36px; border-color: transparent; color: #496882; background: transparent; font-weight: 550; }
 .nav-orders-link:hover { border-color: #dce7f1; background: #f5f9fc; }
+.nav-sign-out-link { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #dce7f1; border-radius: 9px; padding: 0 13px; color: #254764; background: #fff; font-size: 10px; font-weight: 650; }
+.nav-sign-out-link:hover { border-color: #e4bd32; background: #fff8df; }
 
 @media (max-width: 1100px) {
   .site-header { grid-template-columns: 190px minmax(200px,1fr) auto; }
