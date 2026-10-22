@@ -36,6 +36,7 @@ public class DemoCatalogSeeder implements ApplicationRunner {
 
         List<Book> catalog = new ArrayList<>();
         addSchool(catalog);
+        addCbseClassTenBooks(catalog);
         addIntermediate(catalog);
         addEntrance(catalog);
         addEngineering(catalog);
@@ -124,6 +125,52 @@ public class DemoCatalogSeeder implements ApplicationRunner {
                 }
             }
         }
+    }
+
+    private void addCbseClassTenBooks(List<Book> catalog) {
+        catalog.add(cbseClassTenBook("Mathematics – X", "Mathematics", "NCERT textbook for CBSE Class 10 Mathematics.",
+                "8174506349", "https://www.cbsebookshop.com/wp-content/uploads/10-ncert-math-text.jpg", 170,
+                "https://www.cbsebookshop.com/buy/mathematics-x/"));
+        catalog.add(cbseClassTenBook("Science – X", "Science", "NCERT textbook for CBSE Class 10 Science.",
+                "8174506365", "https://www.cbsebookshop.com/wp-content/uploads/10-ncert-science-text.jpg", 210,
+                "https://www.cbsebookshop.com/buy/science-x/"));
+        catalog.add(cbseClassTenBook("First Flight – X", "English", "NCERT English textbook for CBSE Class 10.",
+                "8174506586", "https://www.cbsebookshop.com/wp-content/uploads/10-ncert-english-first-flight.jpg", 100,
+                "https://www.cbsebookshop.com/buy/first-flight-x/"));
+        catalog.add(cbseClassTenBook("Footprints without Feet – X", "English Supplementary Reader",
+                "NCERT English supplementary reader for CBSE Class 10.", "8174507094",
+                "https://www.cbsebookshop.com/wp-content/uploads/10-ncert-english-footprints-without-feet.jpg", 55,
+                "https://www.cbsebookshop.com/buy/footprints-without-feet-x/"));
+        catalog.add(cbseClassTenBook("India and the Contemporary World – 2", "History",
+                "NCERT history textbook for CBSE Class 10.", "8174507078",
+                "https://www.cbsebookshop.com/wp-content/uploads/10-ncert-soc-india-and-the-contemporary-world-2.jpg", 130,
+                "https://www.cbsebookshop.com/buy/india-and-the-contemporary-world-2/"));
+        catalog.add(cbseClassTenBook("Contemporary India – 2", "Geography",
+                "NCERT geography textbook for CBSE Class 10.", "8174506446",
+                "https://www.cbsebookshop.com/wp-content/uploads/10-ncert-soc-contemporary-india-2.jpg", 95,
+                "https://www.cbsebookshop.com/buy/contemporary-india-2/"));
+        catalog.add(cbseClassTenBook("Understanding Economic Development – X", "Economics",
+                "NCERT economics textbook for CBSE Class 10.", "8174506551",
+                "https://www.cbsebookshop.com/wp-content/uploads/10-ncert-soc-understanding-economic-development.jpg", 100,
+                "https://www.cbsebookshop.com/buy/understanding-economic-development-x/"));
+    }
+
+    private Book cbseClassTenBook(String title, String subject, String description, String isbn,
+                                  String imageUrl, int price, String productSource) {
+        Map<String, Object> specifications = Map.of(
+                "board", "CBSE / NCERT",
+                "class", "Class 10",
+                "subject", subject,
+                "academicYear", "2025–26",
+                "editionStatus", "Matched to the listed NCERT ISBN",
+                "coverSource", productSource);
+        Book book = product(title, "National Council of Educational Research and Training (NCERT)", description,
+                price, 12, "School Books", "Class 10 · " + subject, "NCERT", "2025–26", "English",
+                "Paperback", specifications, false, false);
+        book.setIsbn(isbn);
+        book.setImageUrl(imageUrl);
+        book.setListingNote("CBSE / NCERT Class 10 · ISBN-matched cover · demo stock and price");
+        return book;
     }
 
     private void addIntermediate(List<Book> catalog) {

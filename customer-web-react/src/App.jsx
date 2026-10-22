@@ -282,6 +282,9 @@ function App() {
     if (sortBy === "price-low") result = [...result].sort((a, b) => a.price - b.price);
     if (sortBy === "price-high") result = [...result].sort((a, b) => b.price - a.price);
     if (sortBy === "title") result = [...result].sort((a, b) => a.title.localeCompare(b.title));
+    if (sortBy === "featured" && activeCategory === "School Books") {
+      result = [...result].sort((a, b) => Number(!(a.isbn && a.imageUrl)) - Number(!(b.isbn && b.imageUrl)));
+    }
     return result;
   }, [books, query, activeShelf, sortBy, activeCategory, activeCategoryGroup, selectedBookGroup, activeSubcategory, facetKey, facetValue, conditionFilter]);
 
