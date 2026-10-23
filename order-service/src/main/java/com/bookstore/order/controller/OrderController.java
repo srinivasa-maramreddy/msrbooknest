@@ -21,7 +21,9 @@ public class OrderController {
     }
 
     @PostMapping
-    public ResponseEntity<?> placeOrder(@RequestBody PlaceOrderRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<?> placeOrder(@RequestBody PlaceOrderRequest request,
+                                        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                        HttpServletRequest httpRequest) {
         String email = getEmail(httpRequest);
         if (email == null) {
             return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
@@ -29,7 +31,25 @@ public class OrderController {
         String authorizationHeader = httpRequest.getHeader("Authorization");
 
         try {
-            return ResponseEntity.ok(orderService.place(email, authorizationHeader, request));
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                if (request.getOrderRequestId() != null && !request.getOrderRequestId().isBlank()
+                        && !idempotencyKey.equals(request.getOrderRequestId())) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Idempotency-Key must match orderRequestId"));
+                }
+                request.setOrderRequestId(idempotencyKey);
+            }
+            return ResponseEntity.status(201).body(orderService.place(email, authorizationHeader, request));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/quote")
+    public ResponseEntity<?> checkoutQuote(@RequestBody PlaceOrderRequest request, HttpServletRequest httpRequest) {
+        String email = getEmail(httpRequest);
+        if (email == null) return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
+        try {
+            return ResponseEntity.ok(orderService.quote(httpRequest.getHeader("Authorization"), request.getItems()));
         } catch (RuntimeException ex) {
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
         }
@@ -42,6 +62,17 @@ public class OrderController {
             return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
         }
         return ResponseEntity.ok(orderService.myOrders(email));
+    }
+
+    @GetMapping("/me/reference/{orderRequestId}")
+    public ResponseEntity<?> getMyOrderByReference(@PathVariable String orderRequestId, HttpServletRequest request) {
+        String email = getEmail(request);
+        if (email == null) return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
+        try {
+            return ResponseEntity.ok(orderService.getOwnedOrder(email, orderRequestId));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
+        }
     }
 
     @GetMapping("/me/review-eligibility/{bookId}")

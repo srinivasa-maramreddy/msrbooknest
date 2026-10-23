@@ -376,26 +376,19 @@ export const demoApi = {
     return clone(allOrders().filter((order) => order.customerEmail === user.email).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
   },
 
-  async placeOrder(_token, payload) {
-    const user = requireUser();
-    const items = (payload.items || []).map((item) => ({ ...item, quantity: Math.max(1, Number(item.quantity) || 1), unitPrice: Number(item.unitPrice) || 0 }));
-    if (!items.length) throw new Error("Add a book to your bag before checkout.");
-    const order = {
-      id: makeId("ORDER"),
-      orderRequestId: payload.orderRequestId || makeId("MSR"),
-      customerEmail: user.email,
-      status: payload.paymentAddress === "fail@upi" ? "PAYMENT_FAILED" : "PAID",
-      paymentReference: payload.paymentAddress === "fail@upi" ? null : `MOCK-NPCI-${Date.now()}`,
-      createdAt: stamp(),
-      totalAmount: items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
-      customerName: payload.customerName,
-      phone: payload.phone,
-      address: payload.address,
-      items,
-    };
-    saveOrders([order, ...allOrders()]);
-    return clone(order);
+  async quoteCheckout() {
+    throw new Error("Secure checkout needs the Spring Boot services. The public browser demo does not calculate payment totals or accept payments.");
   },
+
+  async placeOrder(_token, payload) {
+    requireUser();
+    throw new Error("Secure checkout needs the Spring Boot services and Razorpay test credentials. No demo payment was created.");
+  },
+
+  async getOwnedOrder() { throw new Error("Order details are available when the Spring Boot services are connected."); },
+  async createPaymentOrder() { throw new Error("Razorpay test checkout is not configured in the public browser demo."); },
+  async verifyPayment() { throw new Error("Payment verification is available through the configured Spring Boot backend."); },
+  async getPaymentStatus() { throw new Error("Payment status is available through the configured Spring Boot backend."); },
 
   async getBuybacks() {
     const user = requireUser();

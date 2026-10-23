@@ -9,8 +9,9 @@ The current localhost demo and its design are documented in the [Docker guide](d
 - Spring Data JPA/Hibernate persistence with separate auth, catalog, cart, order, payment, and buyback schemas.
 - Catalog-authoritative pricing and decimal money handling using `BigDecimal` and `DECIMAL(12,2)`.
 - Idempotent order checkout, inventory holds with expiry/compensation, and an Order-service transactional outbox.
-- Kafka payment request/result and inventory settle/release events.
-- Deterministic simulated UPI/card processing, including success and decline outcomes.
+- Kafka verified payment success and inventory settlement events, plus an Order-service transactional outbox.
+- Razorpay UPI Test Mode checkout with provider-side status reconciliation and signed webhook verification; live payments disabled by default.
+- Stable, fingerprinted checkout idempotency and separately persisted payment attempt keys.
 - Used-book buyback with photo uploads, versioned quotations, mock video and physical inspection, DTDC tracking, return/dispute decisions, unique payout ledger, and Kafka status events.
 - Docker Compose configuration for the complete demo stack.
 
@@ -21,11 +22,11 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Open `http://localhost:5173`, sign in as the demo reader, then complete one checkout with `success@upi` and one with `fail@upi`. Check that the order state changes asynchronously and that service health endpoints return `UP`. The steps are in the [demo guide](docker-deployment.md).
+Configure Razorpay Test Mode credentials using [the checkout guide](razorpay-test-checkout.md), open `http://localhost:5173`, sign in as the demo reader, and complete a test UPI checkout. Retry a confirmed failed/cancelled attempt on the same order. Check the asynchronous order state change and service health endpoints. The steps are in the [demo guide](docker-deployment.md).
 
 ## Good next increments for a production-shaped version
 
-1. Add automated unit and integration tests around auth, order idempotency, inventory compensation, and duplicate Kafka delivery.
+1. Extend automated unit and integration tests around auth, order idempotency, inventory compensation, payment webhook replay, and duplicate Kafka delivery.
 2. Add a schema migration tool and a migration for existing money columns before changing schema policy away from `ddl-auto: update`.
 3. Add outbox row claiming/locking for multiple Order replicas, exponential retry limits, dead-letter routing, and a replay procedure.
 4. Add trace/correlation IDs across REST and Kafka, structured logs, metrics, and dashboards for outbox age, consumer lag, and stuck pending orders.

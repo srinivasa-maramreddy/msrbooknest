@@ -7,6 +7,7 @@ import com.bookstore.order.entity.OrderItem;
 import com.bookstore.order.entity.OrderStatus;
 import com.bookstore.order.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -15,6 +16,10 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.TreeMap;
 
 @Service
 public class OrderService {
@@ -35,12 +40,10 @@ public class OrderService {
 
     public Order place(String customerEmail, String authorizationHeader, PlaceOrderRequest request) {
         validateCheckoutRequest(request);
+        String fingerprint = fingerprint(customerEmail, request);
         Order existing = orderRepository.findByOrderRequestId(request.getOrderRequestId()).orElse(null);
         if (existing != null) {
-            if (!existing.getCustomerEmail().equalsIgnoreCase(customerEmail)) {
-                throw new RuntimeException("Order request identifier belongs to another customer");
-            }
-            return existing;
+            return verifyIdempotentReplay(existing, customerEmail, fingerprint);
         }
 
         List<OrderItemRequest> checkoutItems = resolveItems(authorizationHeader, request);
@@ -51,13 +54,14 @@ public class OrderService {
 
         Order order = new Order();
         order.setOrderRequestId(request.getOrderRequestId());
+        order.setIdempotencyHash(fingerprint);
         order.setCustomerEmail(customerEmail);
         order.setCustomerName(request.getCustomerName().trim());
         order.setPhone(request.getPhone().trim());
         order.setAddress(request.getAddress().trim());
         order.setPaymentMethod(request.getPaymentMethod());
 
-        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal subtotal = BigDecimal.ZERO;
         for (InventoryBookQuote quote : reservation.getItems()) {
             OrderItem item = new OrderItem();
             item.setBookId(quote.getBookId());
@@ -66,14 +70,98 @@ public class OrderService {
             item.setUnitPrice(quote.getUnitPrice());
             item.setOrder(order);
             order.getItems().add(item);
-            total = total.add(quote.getLineTotal());
+            subtotal = subtotal.add(quote.getLineTotal());
         }
-        order.setTotalAmount(total);
+        BigDecimal shipping = shippingFor(subtotal);
+        order.setShippingAmount(shipping);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTotalAmount(subtotal.add(shipping));
+        order.setPaymentStatus("CREATED");
 
         // The reservation expires automatically if this local transaction fails after the remote hold.
-        Order created = workflowService.createPending(order, request.getPaymentAddress());
+        Order created;
+        try {
+            created = workflowService.createPending(order, request.getPaymentAddress());
+        } catch (DataIntegrityViolationException duplicate) {
+            Order winner = orderRepository.findByOrderRequestId(request.getOrderRequestId()).orElse(null);
+            if (winner == null) throw duplicate;
+            return verifyIdempotentReplay(winner, customerEmail, fingerprint);
+        }
         if (request.getItems() == null || request.getItems().isEmpty()) clearServerCart(authorizationHeader);
         return created;
+    }
+
+    public CheckoutQuote quote(String authorizationHeader, List<OrderItemRequest> items) {
+        if (items == null || items.isEmpty()) throw new IllegalArgumentException("Your cart is empty");
+        List<OrderItemRequest> ownedCart = loadServerCart(authorizationHeader);
+        if (!sameQuantities(ownedCart, items)) {
+            throw new IllegalArgumentException("Your cart changed. Refresh the checkout before continuing.");
+        }
+        List<Map<String, Object>> requested = items.stream().map(item -> {
+            if (item == null || item.getBookId() == null || item.getQuantity() == null || item.getQuantity() < 1) {
+                throw new IllegalArgumentException("Each item needs a valid book and quantity");
+            }
+            return Map.<String, Object>of("bookId", item.getBookId(), "quantity", item.getQuantity());
+        }).toList();
+        Map<String, Object> payload = Map.of("items", requested);
+        CatalogQuote response = catalogClient.post().uri("/api/books/inventory/quote")
+                .header("Authorization", authorizationHeader).body(payload).retrieve().body(CatalogQuote.class);
+        if (response == null || response.items == null || response.items.isEmpty()) {
+            throw new IllegalStateException("The catalog returned an empty checkout quote");
+        }
+        BigDecimal subtotal = response.items.stream().map(item -> item.lineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal shipping = shippingFor(subtotal);
+        return new CheckoutQuote(response.items, subtotal, BigDecimal.ZERO, shipping, subtotal.add(shipping), "INR");
+    }
+
+    public Order getOwnedOrder(String email, String orderRequestId) {
+        Order order = orderRepository.findByOrderRequestId(orderRequestId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found"));
+        if (!order.getCustomerEmail().equalsIgnoreCase(email)) throw new IllegalArgumentException("Order not found");
+        return order;
+    }
+
+    private Order verifyIdempotentReplay(Order existing, String customerEmail, String fingerprint) {
+        if (!existing.getCustomerEmail().equalsIgnoreCase(customerEmail)) {
+            throw new IllegalArgumentException("Idempotency key belongs to another customer");
+        }
+        if (existing.getIdempotencyHash() != null && !existing.getIdempotencyHash().equals(fingerprint)) {
+            throw new IllegalArgumentException("This checkout key was already used with different order details. Start checkout again.");
+        }
+        return existing;
+    }
+
+    private BigDecimal shippingFor(BigDecimal subtotal) {
+        return subtotal.compareTo(new BigDecimal("499.00")) >= 0 ? BigDecimal.ZERO : new BigDecimal("40.00");
+    }
+
+    private String fingerprint(String customerEmail, PlaceOrderRequest request) {
+        StringBuilder canonical = new StringBuilder();
+        append(canonical, customerEmail == null ? "" : customerEmail.trim().toLowerCase());
+        append(canonical, request.getCustomerName().trim());
+        append(canonical, request.getPhone().trim());
+        append(canonical, request.getAddress().trim());
+        append(canonical, request.getPaymentMethod().trim().toUpperCase());
+        TreeMap<Long, Integer> quantities = new TreeMap<>();
+        if (request.getItems() != null) {
+            request.getItems().forEach(item -> {
+                if (item != null && item.getBookId() != null && item.getQuantity() != null) {
+                    quantities.merge(item.getBookId(), item.getQuantity(), Integer::sum);
+                }
+            });
+        }
+        quantities.forEach((id, quantity) -> { append(canonical, id.toString()); append(canonical, quantity.toString()); });
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(canonical.toString().getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    private void append(StringBuilder value, String part) {
+        value.append(part.length()).append(':').append(part).append(';');
     }
 
     public List<Order> myOrders(String email) {
@@ -118,6 +206,9 @@ public class OrderService {
         if (request == null || request.getOrderRequestId() == null || request.getOrderRequestId().isBlank()) {
             throw new RuntimeException("orderRequestId is required");
         }
+        if (request.getOrderRequestId().length() > 80 || !request.getOrderRequestId().equals(request.getOrderRequestId().trim())) {
+            throw new IllegalArgumentException("Checkout reference must be 1–80 characters with no surrounding spaces");
+        }
         if (request.getCustomerName() == null || request.getCustomerName().isBlank()) {
             throw new RuntimeException("Customer name is required");
         }
@@ -127,13 +218,24 @@ public class OrderService {
         if (request.getAddress() == null || request.getAddress().isBlank()) {
             throw new RuntimeException("Address is required");
         }
-        if (!List.of("UPI", "Credit Card", "Debit Card").contains(request.getPaymentMethod())) {
-            throw new RuntimeException("Invalid payment method");
+        if (!"UPI".equalsIgnoreCase(request.getPaymentMethod())) {
+            throw new IllegalArgumentException("Only UPI payment is currently supported");
         }
+        if (request.getItems() != null && request.getItems().isEmpty()) throw new IllegalArgumentException("Your cart is empty");
     }
 
     private List<OrderItemRequest> resolveItems(String authorizationHeader, PlaceOrderRequest request) {
-        if (request.getItems() != null && !request.getItems().isEmpty()) return request.getItems();
+        List<OrderItemRequest> ownedItems = loadServerCart(authorizationHeader);
+        if (request.getItems() != null && !request.getItems().isEmpty()) {
+            if (!sameQuantities(ownedItems, request.getItems())) {
+                throw new IllegalArgumentException("Your cart changed. Refresh the checkout before continuing.");
+            }
+            return ownedItems;
+        }
+        return ownedItems;
+    }
+
+    private List<OrderItemRequest> loadServerCart(String authorizationHeader) {
         if (authorizationHeader == null || authorizationHeader.isBlank()) {
             throw new RuntimeException("Authorization header is required to checkout server cart");
         }
@@ -149,6 +251,22 @@ public class OrderService {
             items.add(item);
         }
         return items;
+    }
+
+    private boolean sameQuantities(List<OrderItemRequest> left, List<OrderItemRequest> right) {
+        return quantities(left).equals(quantities(right));
+    }
+
+    private Map<Long, Integer> quantities(List<OrderItemRequest> items) {
+        Map<Long, Integer> result = new TreeMap<>();
+        if (items == null) return result;
+        for (OrderItemRequest item : items) {
+            if (item == null || item.getBookId() == null || item.getQuantity() == null || item.getQuantity() < 1) {
+                throw new IllegalArgumentException("Each cart item needs a valid book and quantity");
+            }
+            result.merge(item.getBookId(), item.getQuantity(), Integer::sum);
+        }
+        return result;
     }
 
     private InventoryQuoteResponse reserveInventory(String orderRequestId, List<OrderItemRequest> items,
@@ -187,6 +305,18 @@ public class OrderService {
 
     public static class InventoryQuoteResponse {
         private List<InventoryBookQuote> items;
+        private BigDecimal totalAmount;
+        public List<InventoryBookQuote> getItems() { return items; }
+        public BigDecimal getTotalAmount() { return totalAmount; }
+        public void setItems(List<InventoryBookQuote> items) { this.items = items; }
+        public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
+    }
+
+    public record CheckoutQuote(List<InventoryBookQuote> items, BigDecimal subtotal, BigDecimal discountAmount,
+                                BigDecimal deliveryAmount, BigDecimal finalAmount, String currency) {}
+
+    public static class CatalogQuote {
+        private List<InventoryBookQuote> items;
         public List<InventoryBookQuote> getItems() { return items; }
         public void setItems(List<InventoryBookQuote> items) { this.items = items; }
     }
@@ -194,16 +324,19 @@ public class OrderService {
     public static class InventoryBookQuote {
         private Long bookId;
         private String title;
+        private String imageUrl;
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal lineTotal;
         public Long getBookId() { return bookId; }
         public String getTitle() { return title; }
+        public String getImageUrl() { return imageUrl; }
         public Integer getQuantity() { return quantity; }
         public BigDecimal getUnitPrice() { return unitPrice; }
         public BigDecimal getLineTotal() { return lineTotal; }
         public void setBookId(Long bookId) { this.bookId = bookId; }
         public void setTitle(String title) { this.title = title; }
+        public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
         public void setQuantity(Integer quantity) { this.quantity = quantity; }
         public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
         public void setLineTotal(BigDecimal lineTotal) { this.lineTotal = lineTotal; }

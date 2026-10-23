@@ -34,3 +34,13 @@ app:
   jwt:
     secret: ${APP_JWT_SECRET:msrbooknest-demo-signing-key-change-me}
   web-origins: ${APP_WEB_ORIGINS:http://localhost:5173}
+  services:
+    order-base-url: ${ORDER_SERVICE_BASE_URL:http://localhost:8083}
+razorpay:
+  enabled: ${RAZORPAY_ENABLED:false}
+  mode: ${RAZORPAY_MODE:test}
+  allow-live: ${RAZORPAY_ALLOW_LIVE:false}
+  key-id: ${RAZORPAY_KEY_ID:}
+  key-secret: ${RAZORPAY_KEY_SECRET:}
+  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+  base-url: ${RAZORPAY_API_BASE_URL:https://api.razorpay.com/v1}

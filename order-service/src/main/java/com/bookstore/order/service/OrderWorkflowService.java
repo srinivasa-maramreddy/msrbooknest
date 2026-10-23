@@ -3,7 +3,6 @@ package com.bookstore.order.service;
 import com.bookstore.events.BookstoreTopics;
 import com.bookstore.events.OrderCancelledEvent;
 import com.bookstore.events.OrderPaidEvent;
-import com.bookstore.events.OrderPaymentRequestedEvent;
 import com.bookstore.events.PaymentFailedEvent;
 import com.bookstore.events.PaymentSucceededEvent;
 import com.bookstore.order.entity.Order;
@@ -36,19 +35,30 @@ public class OrderWorkflowService {
     @Transactional
     public Order createPending(Order order, String paymentAddress) {
         order.setStatus(OrderStatus.PENDING_PAYMENT);
+        order.setPaymentStatus("CREATED");
         Order saved = orderRepository.save(order);
-        enqueue(BookstoreTopics.PAYMENT_REQUESTED, saved.getOrderRequestId(), new OrderPaymentRequestedEvent(
-                UUID.randomUUID().toString(), 1, Instant.now(), saved.getOrderRequestId(), saved.getCustomerEmail(),
-                saved.getTotalAmount(), saved.getPaymentMethod(), paymentAddress));
         return saved;
     }
 
     @Transactional
     public void paymentSucceeded(PaymentSucceededEvent event) {
-        Order order = orderRepository.findByOrderRequestId(event.orderRequestId()).orElse(null);
-        if (order == null || order.getStatus() != OrderStatus.PENDING_PAYMENT) return;
+        Order order = orderRepository.findByOrderRequestIdForUpdate(event.orderRequestId()).orElse(null);
+        if (order == null) return;
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            if (!"SUCCESS".equals(order.getPaymentStatus())) {
+                order.setPaymentStatus("SUCCESS");
+                order.setPaymentReference(event.providerReference());
+                order.setPaymentReconciliationStatus("REFUND_REQUIRED");
+                order.setFailureReason("A verified payment arrived after this order was cancelled. Refund reconciliation is required.");
+                orderRepository.save(order);
+            }
+            return;
+        }
+        if (order.getStatus() != OrderStatus.PENDING_PAYMENT) return;
         order.setStatus(OrderStatus.PAID);
+        order.setPaymentStatus("SUCCESS");
         order.setPaymentReference(event.providerReference());
+        order.setPaymentReconciliationStatus("NONE");
         order.setFailureReason(null);
         orderRepository.save(order);
         enqueue(BookstoreTopics.ORDER_PAID, order.getOrderRequestId(), new OrderPaidEvent(
@@ -57,13 +67,12 @@ public class OrderWorkflowService {
 
     @Transactional
     public void paymentFailed(PaymentFailedEvent event) {
-        Order order = orderRepository.findByOrderRequestId(event.orderRequestId()).orElse(null);
+        Order order = orderRepository.findByOrderRequestIdForUpdate(event.orderRequestId()).orElse(null);
         if (order == null || order.getStatus() != OrderStatus.PENDING_PAYMENT) return;
-        order.setStatus(OrderStatus.PAYMENT_FAILED);
+        if ("SUCCESS".equals(order.getPaymentStatus())) return;
+        order.setPaymentStatus("FAILED");
         order.setFailureReason(event.reason());
         orderRepository.save(order);
-        enqueue(BookstoreTopics.ORDER_CANCELLED, order.getOrderRequestId(), new OrderCancelledEvent(
-                UUID.randomUUID().toString(), 1, Instant.now(), order.getOrderRequestId(), event.reason()));
     }
 
     private void enqueue(String topic, String key, Object payload) {

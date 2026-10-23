@@ -47,13 +47,13 @@ If inspection passes, the service writes exactly one mock payout record for the 
 
 ### 3-minute checkout walkthrough
 
-1. Sign in as the reader and add a couple of books to the bag.
-2. Open checkout and use **UPI** with `success@upi`.
-3. Show the order moving from `PENDING_PAYMENT` to `PAID` while Order, Payment, Kafka, and Catalog coordinate asynchronously.
-4. Place another order with `fail@upi`; show `PAYMENT_FAILED` and explain the inventory release event.
+1. Configure Razorpay Test Mode credentials as described in [the test checkout guide](razorpay-test-checkout.md), start the stack, then sign in as the reader and add a couple of books to the bag.
+2. Open checkout. Review the backend quote and continue to the UPI-only Razorpay checkout.
+3. Complete a Razorpay test payment. The browser callback is only a verification request; show the backend-confirmed `PAID` order after the Payment service verifies the signature and provider status.
+4. Retry a declined or cancelled test attempt on the same order. The order ID stays the same while the Payment service records a new attempt only after the prior attempt is confirmed terminal.
 5. Open the Swagger UIs or health endpoints to show independently running service APIs.
 
-No actual NPCI or card network is contacted and no money moves. Each simulator response returns a clearly marked demo reference.
+No live funds move in Razorpay Test Mode. Without valid test credentials, payment creation is deliberately disabled. Payment status reconciliation and signed webhooks make delayed or repeated callbacks safe.
 
 ## Inspect activity
 
@@ -84,4 +84,4 @@ The override enables both OTP providers and hides development codes. Compose pas
 
 ## Deployment boundary
 
-The Compose database password, JWT signing key fallback, demo accounts, local origins, one-node Kafka setup, and simulated payment path are intended for localhost only. Before a public deployment, use managed secrets and key rotation, least-privilege service database accounts, database migrations, restricted origins, a production identity strategy, resilient Kafka settings, monitoring, and a certified payment provider.
+The Compose database password, JWT signing key fallback, demo accounts, local origins, one-node Kafka setup, and Razorpay test credentials are intended for localhost only. Before a public deployment, use managed secrets and key rotation, least-privilege service database accounts, database migrations, restricted origins, a production identity strategy, resilient Kafka settings, monitoring, and an approved live payment integration with monitored webhooks and refund/reconciliation procedures.

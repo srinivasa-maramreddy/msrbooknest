@@ -16,6 +16,9 @@ public class PaymentTransaction {
     @Column(nullable = false, unique = true)
     private String orderRequestId;
 
+    @Column(length = 80)
+    private String idempotencyKey;
+
     @Column(nullable = false)
     private String customerEmail;
 
@@ -25,14 +28,30 @@ public class PaymentTransaction {
     @Column(nullable = false)
     private String paymentMethod;
 
+    @Column(length = 8)
+    private String currency = "INR";
+
+    @Column(unique = true, length = 80)
+    private String gatewayOrderId;
+
+    @Column(unique = true, length = 80)
+    private String gatewayPaymentId;
+
+    @Column(length = 24)
+    private String verificationStatus = "NOT_VERIFIED";
+
+    private Integer attemptCount = 0;
+
+    private LocalDateTime paidAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PaymentStatus status;
 
-    @Column(nullable = false)
+    @Column(length = 160)
     private String providerReference;
 
-    @Column(nullable = false)
+    @Column(length = 1000)
     private String message;
 
     @Column(nullable = false)
@@ -54,6 +73,8 @@ public class PaymentTransaction {
         return orderRequestId;
     }
 
+    public String getIdempotencyKey() { return idempotencyKey; }
+
     public String getCustomerEmail() {
         return customerEmail;
     }
@@ -65,6 +86,13 @@ public class PaymentTransaction {
     public String getPaymentMethod() {
         return paymentMethod;
     }
+
+    public String getCurrency() { return currency; }
+    public String getGatewayOrderId() { return gatewayOrderId; }
+    public String getGatewayPaymentId() { return gatewayPaymentId; }
+    public String getVerificationStatus() { return verificationStatus; }
+    public Integer getAttemptCount() { return attemptCount; }
+    public LocalDateTime getPaidAt() { return paidAt; }
 
     public PaymentStatus getStatus() {
         return status;
@@ -94,6 +122,8 @@ public class PaymentTransaction {
         this.orderRequestId = orderRequestId;
     }
 
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
+
     public void setCustomerEmail(String customerEmail) {
         this.customerEmail = customerEmail;
     }
@@ -105,6 +135,13 @@ public class PaymentTransaction {
     public void setPaymentMethod(String paymentMethod) {
         this.paymentMethod = paymentMethod;
     }
+
+    public void setCurrency(String currency) { this.currency = currency; }
+    public void setGatewayOrderId(String gatewayOrderId) { this.gatewayOrderId = gatewayOrderId; }
+    public void setGatewayPaymentId(String gatewayPaymentId) { this.gatewayPaymentId = gatewayPaymentId; }
+    public void setVerificationStatus(String verificationStatus) { this.verificationStatus = verificationStatus; }
+    public void setAttemptCount(Integer attemptCount) { this.attemptCount = attemptCount; }
+    public void setPaidAt(LocalDateTime paidAt) { this.paidAt = paidAt; }
 
     public void setStatus(PaymentStatus status) {
         this.status = status;

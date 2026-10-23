@@ -177,18 +177,22 @@ public class BookService {
         if (request == null || request.getOrderRequestId() == null || request.getOrderRequestId().isBlank()) {
             throw new RuntimeException("orderRequestId is required");
         }
+        Map<Long, Integer> requestedQuantities = aggregateRequest(request.getItems());
+        if (requestedQuantities.isEmpty()) {
+            throw new RuntimeException("At least one inventory item is required");
+        }
         InventoryReservation existing = reservationRepository.findByOrderRequestId(request.getOrderRequestId())
                 .orElse(null);
         if (existing != null) {
+            Map<Long, Integer> reservedQuantities = new java.util.TreeMap<>();
+            existing.getItems().forEach(item -> reservedQuantities.merge(item.getBookId(), item.getQuantity(), Integer::sum));
+            if (!reservedQuantities.equals(new java.util.TreeMap<>(requestedQuantities))) {
+                throw new RuntimeException("This checkout key was already used for a different cart");
+            }
             if (existing.getStatus() == InventoryReservationStatus.RELEASED) {
                 throw new RuntimeException("Inventory reservation was already released");
             }
             return reservationQuote(existing);
-        }
-
-        Map<Long, Integer> requestedQuantities = aggregateRequest(request.getItems());
-        if (requestedQuantities.isEmpty()) {
-            throw new RuntimeException("At least one inventory item is required");
         }
 
         InventoryReservation reservation = new InventoryReservation();

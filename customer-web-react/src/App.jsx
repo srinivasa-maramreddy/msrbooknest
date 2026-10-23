@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api.js";
 import { clearSession, getAccessToken, getIdentity, saveSession, subscribeIdentity } from "./auth.js";
 import BuybackDashboard from "./BuybackDashboard.jsx";
@@ -48,6 +48,278 @@ const money = new Intl.NumberFormat("en-IN", {
   currency: "INR",
   maximumFractionDigits: 0,
 });
+const moneyExact = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const EMPTY_CHECKOUT_DRAFT = { customerName: "", phone: "", address: "" };
+
+function readCheckoutDraft(user) {
+  return { ...EMPTY_CHECKOUT_DRAFT, customerName: user?.name || "" };
+}
+
+function newRequestId(prefix) {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  if (globalThis.crypto?.getRandomValues) {
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    return `${prefix}-${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16)}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+
+async function checkoutIdempotencyKey(user, payload) {
+  const items = [...(payload.items || [])]
+    .map((item) => [String(item.bookId), Number(item.quantity)])
+    .sort(([left], [right]) => left.localeCompare(right));
+  const canonical = JSON.stringify([
+    String(user?.email || "").trim().toLowerCase(),
+    String(payload.customerName || "").trim(),
+    String(payload.phone || "").trim(),
+    String(payload.address || "").trim(),
+    "UPI",
+    items,
+  ]);
+  let fingerprint;
+  if (globalThis.crypto?.subtle) {
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+    fingerprint = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  } else {
+    let hash = 2166136261;
+    for (const character of canonical) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+    fingerprint = (hash >>> 0).toString(16);
+  }
+  const storageKey = `msrbooknest.checkout.intent:${String(user?.email || "").toLowerCase()}`;
+  try {
+    const current = JSON.parse(sessionStorage.getItem(storageKey) || "null");
+    if (current?.fingerprint === fingerprint && current?.key) return current.key;
+  } catch { /* Generate a fresh reference if stored session data is malformed. */ }
+  const key = newRequestId("msr-checkout");
+  try { sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, key })); } catch { /* The backend still validates this request's reference. */ }
+  return key;
+}
+
+function newPaymentAttemptId() {
+  return newRequestId("msr-payment");
+}
+
+function storedPaymentAttemptId(orderRequestId) {
+  try { return sessionStorage.getItem(`msrbooknest.payment-attempt:${orderRequestId}`) || ""; } catch { return ""; }
+}
+
+function rememberPaymentAttemptId(orderRequestId, attemptRequestId) {
+  try { sessionStorage.setItem(`msrbooknest.payment-attempt:${orderRequestId}`, attemptRequestId); } catch { /* The order still owns the durable server-side attempt. */ }
+}
+
+function loadRazorpayCheckout() {
+  if (window.Razorpay) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const existing = document.querySelector('script[data-razorpay-checkout="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(Boolean(window.Razorpay)), { once: true });
+      existing.addEventListener("error", () => resolve(false), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.dataset.razorpayCheckout = "true";
+    script.onload = () => resolve(Boolean(window.Razorpay));
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess }) {
+  const { orderRequestId = "" } = useParams();
+  const navigate = useNavigate();
+  const [order, setOrder] = useState(null);
+  const [payment, setPayment] = useState(null);
+  const [attemptRequestId, setAttemptRequestId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const successHandled = useRef(false);
+  const isVerifiedSuccess = payment?.status === "SUCCESS" && payment?.verificationStatus === "VERIFIED";
+
+  useEffect(() => {
+    if (!token || !orderRequestId) {
+      setLoading(false);
+      setError("Sign in to view this checkout.");
+      return undefined;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    Promise.all([
+      api.getOwnedOrder(token, orderRequestId),
+      api.getPaymentStatus(token, orderRequestId).catch(() => null),
+    ]).then(([ownedOrder, paymentStatus]) => {
+      if (cancelled) return;
+      setOrder(ownedOrder);
+      setPayment(paymentStatus);
+      const savedAttemptId = paymentStatus?.attemptRequestId || storedPaymentAttemptId(orderRequestId);
+      setAttemptRequestId(savedAttemptId);
+      if (paymentStatus?.attemptRequestId) rememberPaymentAttemptId(orderRequestId, paymentStatus.attemptRequestId);
+      if (paymentStatus?.status === "PENDING") setNotice("Verifying your payment. Please wait...");
+    }).catch((loadError) => {
+      if (!cancelled) setError(loadError.message || "We could not load this order.");
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, orderRequestId]);
+
+  useEffect(() => {
+    if (isVerifiedSuccess && !successHandled.current) {
+      successHandled.current = true;
+      onPaymentSuccess?.();
+    }
+  }, [isVerifiedSuccess, onPaymentSuccess]);
+
+  async function reconcilePayment({ quiet = false } = {}) {
+    if (!token || !orderRequestId) return null;
+    if (!quiet) setChecking(true);
+    setNotice("Verifying your payment. Please wait...");
+    try {
+      const result = await api.getPaymentStatus(token, orderRequestId);
+      setPayment(result);
+      if (result?.attemptRequestId) {
+        setAttemptRequestId(result.attemptRequestId);
+        rememberPaymentAttemptId(orderRequestId, result.attemptRequestId);
+      }
+      setError("");
+      if (result.status === "PENDING") setNotice("We couldn't verify your payment yet. Your payment status is being checked.");
+      else setNotice("");
+      return result;
+    } catch (checkError) {
+      setNotice("We couldn't verify your payment yet. Your payment status is being checked.");
+      if (!quiet) setError(checkError.message || "Payment status is not available yet.");
+      return null;
+    } finally {
+      if (!quiet) setChecking(false);
+    }
+  }
+
+  async function continueToPay() {
+    if (!order || !token || busy) return;
+    setBusy(true);
+    setError("");
+    setNotice("Preparing secure UPI checkout…");
+    try {
+      const terminalAttempt = ["FAILED", "CANCELLED"].includes(payment?.status)
+        && payment?.attemptRequestId && payment.attemptRequestId === attemptRequestId;
+      const nextAttemptId = !attemptRequestId || terminalAttempt ? newPaymentAttemptId() : attemptRequestId;
+      setAttemptRequestId(nextAttemptId);
+      rememberPaymentAttemptId(orderRequestId, nextAttemptId);
+      const checkout = await api.createPaymentOrder(token, orderRequestId, nextAttemptId, nextAttemptId);
+      setPayment(checkout);
+      if (checkout?.attemptRequestId) {
+        setAttemptRequestId(checkout.attemptRequestId);
+        rememberPaymentAttemptId(orderRequestId, checkout.attemptRequestId);
+      }
+      if (checkout.status === "SUCCESS" && checkout.verificationStatus === "VERIFIED") return;
+      if (!checkout.gatewayOrderId || !checkout.keyId) {
+        setNotice(checkout.message || "Payment is processing. Check the payment status before retrying.");
+        return;
+      }
+      if (!await loadRazorpayCheckout()) throw new Error("Secure checkout could not be loaded. Check your connection and try again.");
+      const options = {
+        key: checkout.keyId,
+        amount: Math.round(Number(checkout.amount) * 100),
+        currency: checkout.currency || "INR",
+        name: "msrbooknest",
+        description: `Order ${orderRequestId}`,
+        order_id: checkout.gatewayOrderId,
+        prefill: { name: order.customerName, email: user?.email || "", contact: order.phone || "" },
+        notes: { order_reference: orderRequestId },
+        config: {
+          display: {
+            blocks: { upi_only: { name: "Pay via UPI", instruments: [{ method: "upi" }] } },
+            sequence: ["block.upi_only"],
+            preferences: { show_default_blocks: false },
+          },
+        },
+        theme: { color: "#17324f" },
+        handler: async (callback) => {
+          setModalOpen(false);
+          setNotice("Verifying your payment. Please wait...");
+          try {
+            const result = await api.verifyPayment(token, {
+              orderRequestId,
+              attemptRequestId: nextAttemptId,
+              razorpayOrderId: callback.razorpay_order_id,
+              razorpayPaymentId: callback.razorpay_payment_id,
+              razorpaySignature: callback.razorpay_signature,
+            });
+            setPayment(result);
+            setNotice(result.status === "PENDING" ? "We couldn't verify your payment yet. Your payment status is being checked." : "");
+          } catch (verificationError) {
+            setNotice("We couldn't verify your payment yet. Your payment status is being checked.");
+            setError(verificationError.message || "Payment verification is still in progress.");
+            await reconcilePayment({ quiet: true });
+          }
+        },
+        modal: {
+          ondismiss: async () => {
+            setModalOpen(false);
+            setNotice("Checkout was closed. Confirming the payment status with Razorpay…");
+            const result = await reconcilePayment({ quiet: true });
+            if (result?.status !== "SUCCESS") setNotice("Payment is processing. Check its status before retrying.");
+          },
+        },
+      };
+      const checkoutModal = new window.Razorpay(options);
+      checkoutModal.on("payment.failed", (failure) => {
+        setNotice(failure?.error?.description
+          ? `${failure.error.description} You can retry within secure checkout, or close it to check the payment status.`
+          : "Razorpay could not complete this attempt. You can retry within secure checkout, or close it to check the status.");
+      });
+      setModalOpen(true);
+      checkoutModal.open();
+      setNotice("");
+    } catch (paymentError) {
+      setError(paymentError.message || "Secure checkout is unavailable right now.");
+      setNotice("Your order remains pending. Retry with the same order reference or check payment status.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) return <section className="route-content payment-page"><div className="payment-state-card">Loading your secure checkout…</div></section>;
+  if (error && !order) return <section className="route-content payment-page"><div className="route-page-heading"><span className="eyebrow">SECURE CHECKOUT</span><h1>Order unavailable</h1><p>{error}</p></div><button className="button button-dark" onClick={() => navigate("/cart")}>Return to cart</button></section>;
+  if (!order) return null;
+
+  const amount = Number(order.totalAmount || 0);
+  const phase = isVerifiedSuccess ? "success" : payment?.status === "FAILED" ? "failed" : payment?.status === "CANCELLED" ? "cancelled" : payment?.status === "PENDING" ? "pending" : "ready";
+  const displayItems = Array.isArray(order.items) ? order.items : [];
+
+  return (
+    <section className="route-content payment-page">
+      <div className="payment-page-heading"><span className="eyebrow">MSRBOOKNEST · SECURE CHECKOUT</span><h1>{phase === "success" ? "Payment successful." : phase === "failed" ? "Payment failed." : phase === "cancelled" ? "Payment cancelled." : phase === "pending" ? "Payment is processing." : "Choose how to pay."}</h1><p>Order reference <strong>{orderRequestId}</strong></p></div>
+      {phase === "success" ? (
+        <div className="payment-result-card payment-result-success"><span className="payment-result-icon" aria-hidden="true">✓</span><span className="eyebrow">PAYMENT VERIFIED</span><h2>Payment Successful</h2><p>Razorpay confirmed this UPI payment. Your order is now being prepared.</p><dl><div><dt>Order ID</dt><dd>{orderRequestId}</dd></div><div><dt>Transaction reference</dt><dd>{payment?.gatewayPaymentId || payment?.providerReference || "Verified by Razorpay"}</dd></div><div><dt>Amount paid</dt><dd>{moneyExact.format(amount)}</dd></div><div><dt>Payment method</dt><dd>UPI</dd></div><div><dt>Payment date</dt><dd>{payment?.paidAt ? new Date(payment.paidAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Just now"}</dd></div><div><dt>Delivery address</dt><dd>{order.address}</dd></div></dl><div className="payment-result-actions"><button className="button button-dark" onClick={() => navigate("/orders")}>View order</button><button className="button button-outline" onClick={() => navigate("/books")}>Continue shopping</button></div></div>
+      ) : phase === "failed" || phase === "cancelled" ? (
+        <div className={`payment-result-card payment-result-${phase}`}><span className="payment-result-icon" aria-hidden="true">{phase === "failed" ? "!" : "↺"}</span><span className="eyebrow">ORDER {phase === "failed" ? "NOT PAID" : "STATUS CHECKED"}</span><h2>Payment {phase === "failed" ? "Failed" : "Cancelled"}</h2><p>{payment?.message || (phase === "failed" ? "Razorpay reports that this attempt was not completed." : "Checkout was closed. We checked with Razorpay before showing this status.")}</p><strong className="payment-result-amount">{moneyExact.format(amount)}</strong><p>Order reference: <strong>{orderRequestId}</strong></p><div className="payment-result-actions"><button className="button button-dark" onClick={continueToPay} disabled={busy || modalOpen}>{busy ? "Preparing checkout…" : modalOpen ? "Razorpay checkout is open…" : "Retry payment"}</button><button className="button button-outline" onClick={() => navigate("/cart")}>Return to cart</button><button className="text-link" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking…" : "Check status"}</button></div></div>
+      ) : phase === "pending" ? (
+        <div className="payment-result-card payment-result-pending"><span className="payment-result-icon" aria-hidden="true">…</span><span className="eyebrow">PLEASE WAIT</span><h2>Payment is Processing</h2><p>{notice || "We couldn't verify your payment yet. Your payment status is being checked."}</p><strong className="payment-result-amount">{moneyExact.format(amount)}</strong><p>Order reference: <strong>{orderRequestId}</strong></p><div className="payment-result-actions"><button className="button button-dark" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking…" : "Check payment status"}</button><button className="button button-outline" onClick={() => navigate("/orders")}>View orders</button></div><small>Do not start a second order. This checkout reference stays the same while Razorpay confirms the result.</small></div>
+      ) : (
+        <div className="payment-page-layout">
+          <div className="payment-main-column">
+            <article className="payment-method-card"><span className="payment-step">1</span><div className="payment-card-content"><div className="payment-card-title"><span className="upi-icon" aria-hidden="true">UPI</span><div><h2>Pay by UPI</h2><p>Use a UPI app, intent, or QR option offered by secure checkout.</p></div></div><div className="upi-brands" aria-label="UPI apps supported by Razorpay where available"><span>G Pay</span><span>PhonePe</span><span>Paytm</span><small>Availability depends on your device and checkout options.</small></div></div><span className="payment-selected-check" aria-label="Selected">✓</span></article>
+            <div className="payment-security-note"><span aria-hidden="true">⌑</span><p><strong>Secure payment checkout</strong><br />You will continue to Razorpay’s official checkout to authorize the payment. MSRBookNest never asks for your UPI PIN or banking password.</p></div>
+            {notice && <div className="payment-inline-notice" role="status">{notice}</div>}
+            {error && <div className="payment-inline-error" role="alert">{error}</div>}
+            <button className="button button-yellow payment-continue-button" onClick={continueToPay} disabled={busy || modalOpen}>{busy ? "Preparing secure checkout…" : modalOpen ? "Razorpay checkout is open…" : `Continue to Pay · ${moneyExact.format(amount)}`}</button>
+            <button className="payment-check-link" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking with Razorpay…" : "Already paid? Check payment status"}</button>
+          </div>
+          <aside className="payment-summary-card"><div className="payment-summary-heading"><span className="eyebrow">ORDER SUMMARY</span><span>Delivery details</span></div><div className="payment-summary-items">{displayItems.map((item) => { const localBook = cartItems.find((book) => String(book.bookId ?? book.id) === String(item.bookId)) || catalogBooks.find((book) => String(book.id) === String(item.bookId)) || {}; return <article className="payment-summary-item" key={item.id || item.bookId}><Cover book={{ ...localBook, ...item, id: item.bookId, imageUrl: localBook.imageUrl || item.imageUrl }} compact /><div><strong>{item.title}</strong><small>Qty {item.quantity} × {moneyExact.format(Number(item.unitPrice || 0))}</small></div><b>{moneyExact.format(Number(item.unitPrice || 0) * Number(item.quantity || 0))}</b></article>; })}</div><dl className="payment-totals"><div><dt>Subtotal</dt><dd>{moneyExact.format(Number(order.totalAmount || 0) - Number(order.shippingAmount || 0) + Number(order.discountAmount || 0))}</dd></div><div><dt>Discount</dt><dd>− {moneyExact.format(Number(order.discountAmount || 0))}</dd></div><div><dt>Delivery</dt><dd>{Number(order.shippingAmount || 0) === 0 ? "FREE" : moneyExact.format(Number(order.shippingAmount || 0))}</dd></div><div className="payment-grand-total"><dt>Final payable</dt><dd>{moneyExact.format(amount)}</dd></div></dl><div className="payment-address"><span className="eyebrow">DELIVERING TO</span><strong>{order.customerName}</strong><span>{order.address}</span><span>{order.phone}</span></div></aside>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function readStoredCart() {
   try {
@@ -207,7 +479,11 @@ function App() {
   const [recoveryMaskedEmail, setRecoveryMaskedEmail] = useState("");
   const [recoveryDemoOtp, setRecoveryDemoOtp] = useState("");
   const [checkoutBusy, setCheckoutBusy] = useState(false);
-  const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState("UPI");
+  const [checkoutDraft, setCheckoutDraft] = useState(() => readCheckoutDraft(getIdentity()));
+  const [checkoutQuote, setCheckoutQuote] = useState(null);
+  const [checkoutQuoteLoading, setCheckoutQuoteLoading] = useState(false);
+  const [checkoutQuoteError, setCheckoutQuoteError] = useState("");
+  const [checkoutQuoteRefresh, setCheckoutQuoteRefresh] = useState(0);
   const [toast, setToast] = useState("");
   const [activeAd, setActiveAd] = useState(0);
   const [adsPaused, setAdsPaused] = useState(false);
@@ -288,6 +564,17 @@ function App() {
       setOrdersLoading(false);
     }
   }, [token]);
+
+  const handlePaymentSuccess = useCallback(async () => {
+    if (!token) return;
+    try {
+      await api.clearCart(token);
+      setCart([]);
+    } catch {
+      showToast("Payment is verified. Your order is safe, but the bag could not be cleared yet.");
+    }
+    await loadOrders(token);
+  }, [token, loadOrders]);
 
   useEffect(() => {
     loadBooks();
@@ -531,6 +818,33 @@ function App() {
 
   const cartCount = cart.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const cartTotal = cart.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0), 0);
+  const checkoutItems = useMemo(() => cart.map((item) => ({
+    bookId: item.bookId ?? item.id,
+    quantity: Number(item.quantity || 0),
+  })).filter((item) => item.bookId && item.quantity > 0).sort((left, right) => String(left.bookId).localeCompare(String(right.bookId))), [cart]);
+  const checkoutItemsSignature = JSON.stringify(checkoutItems);
+
+  useEffect(() => {
+    if (location.pathname !== "/checkout" || !token || !checkoutItems.length) {
+      setCheckoutQuote(null);
+      setCheckoutQuoteError("");
+      setCheckoutQuoteLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setCheckoutQuote(null);
+    setCheckoutQuoteLoading(true);
+    setCheckoutQuoteError("");
+    api.quoteCheckout(token, checkoutItems)
+      .then((quote) => { if (!cancelled) setCheckoutQuote(quote); })
+      .catch((error) => { if (!cancelled) setCheckoutQuoteError(error.message || "We could not verify price and availability."); })
+      .finally(() => { if (!cancelled) setCheckoutQuoteLoading(false); });
+    return () => { cancelled = true; };
+  }, [location.pathname, token, checkoutItemsSignature, checkoutQuoteRefresh]);
+
+  useEffect(() => {
+    setCheckoutDraft(readCheckoutDraft(user));
+  }, [user?.email]);
   const newArrivals = books.filter((book) => book.isNewArrival).slice(0, 4);
   const bestSellers = books.filter((book) => book.isBestSeller).slice(0, 4);
   const usedBooks = books.filter((book) => String(book.conditionLabel || "").startsWith("Used")).slice(0, 4);
@@ -715,30 +1029,31 @@ function App() {
       showToast("Sign in before placing your order.");
       return;
     }
-    const form = new FormData(event.currentTarget);
+    const payload = {
+      customerName: checkoutDraft.customerName.trim(),
+      phone: checkoutDraft.phone.trim(),
+      address: checkoutDraft.address.trim(),
+      paymentMethod: "UPI",
+      items: checkoutItems,
+    };
     setCheckoutBusy(true);
     try {
-      const order = await api.placeOrder(token, {
-        orderRequestId: crypto.randomUUID(),
-        customerName: form.get("customerName").trim(),
-        phone: form.get("phone").trim(),
-        address: form.get("address").trim(),
-        paymentMethod: form.get("paymentMethod"),
-        paymentAddress: form.get("paymentAddress"),
-        items: cart.map((item) => ({
-          bookId: item.bookId,
-          title: item.title,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        })),
-      });
-      await api.clearCart(token);
-      setCart([]);
-      await loadOrders(token);
-      showToast(order.status === "PAID" ? "Order placed. Happy reading!" : `Order status: ${order.status}`);
-      navigate("/orders");
+      const idempotencyKey = await checkoutIdempotencyKey(user, payload);
+      try {
+        const priorOrder = await api.getOwnedOrder(token, idempotencyKey);
+        navigate(`/payment/${encodeURIComponent(priorOrder.orderRequestId)}`);
+        return;
+      } catch { /* A missing prior order is expected on the first checkout attempt. */ }
+      if (!checkoutQuote || checkoutQuoteLoading || checkoutQuoteError) {
+        setCheckoutQuoteRefresh((current) => current + 1);
+        showToast("Refresh price and stock availability before continuing.");
+        return;
+      }
+      const order = await api.placeOrder(token, { ...payload, orderRequestId: idempotencyKey }, idempotencyKey);
+      navigate(`/payment/${encodeURIComponent(order.orderRequestId)}`);
     } catch (error) {
-      showToast(error.message);
+      setCheckoutQuoteError(error.message || "Checkout could not be confirmed.");
+      setCheckoutQuoteRefresh((current) => current + 1);
     } finally {
       setCheckoutBusy(false);
     }
@@ -1171,7 +1486,29 @@ function App() {
   }
 
   function CheckoutPage() {
-    return <section className="route-content checkout-page"><div className="route-page-heading"><span className="eyebrow">ALMOST YOURS</span><h1>Checkout</h1><p>Your bag has {cartCount} {cartCount === 1 ? "book" : "books"} · {money.format(cartTotal)}</p></div>{cart.length === 0 ? <div className="orders-empty"><p>Add a book to your bag before checking out.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Browse books</button></div> : !user ? <div className="checkout-signin"><p>Sign in before placing your order.</p><button className="button button-dark" onClick={() => openAuth("login")}>Sign in to continue</button></div> : <div className="checkout-page-card"><form className="dialog-form" onSubmit={submitCheckout}><label>Recipient name<input name="customerName" autoComplete="name" defaultValue={user?.name || user?.email?.split("@")[0] || ""} required /></label><label>Phone number<input name="phone" type="tel" autoComplete="tel" required placeholder="10 digit number" /></label><label>Delivery address<textarea name="address" autoComplete="street-address" rows="3" required placeholder="House, street, city, PIN code" /></label><label>Payment method<select name="paymentMethod" value={checkoutPaymentMethod} onChange={(event) => setCheckoutPaymentMethod(event.target.value)}><option>UPI</option><option>Credit Card</option><option>Debit Card</option></select></label>{checkoutPaymentMethod === "UPI" && <label>Demo UPI ID<input name="paymentAddress" defaultValue="success@upi" required /><small>Use fail@upi to see a simulated NPCI decline.</small></label>}<p className="identity-note">Payments use a simulator; no money is moved.</p><button className="button button-dark button-full" disabled={checkoutBusy}>{checkoutBusy ? "Placing your order…" : `Place order · ${money.format(cartTotal)}`}</button></form></div>}</section>;
+    const quoteItems = checkoutQuote?.items || [];
+    return <section className="route-content checkout-page">
+      <div className="route-page-heading"><span className="eyebrow">MSRBOOKNEST CHECKOUT</span><h1>Confirm your delivery.</h1><p>Review your books and address. Prices and available stock are checked by the bookstore services.</p></div>
+      <div className="checkout-progress"><span className="checkout-progress-step active"><b>1</b> Delivery</span><i aria-hidden="true" /><span className="checkout-progress-step"><b>2</b> Payment</span><i aria-hidden="true" /><span className="checkout-progress-step"><b>3</b> Confirmation</span></div>
+      {cart.length === 0 ? <div className="orders-empty"><p>Add a book to your bag before checking out.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Browse books</button></div>
+        : !user ? <div className="checkout-signin"><p>Sign in before placing your order.</p><button className="button button-dark" onClick={() => openAuth("login", "/checkout")}>Sign in to continue</button></div>
+          : <form className="checkout-review-layout" onSubmit={submitCheckout}>
+            <div className="checkout-main-column">
+              <article className="checkout-panel"><div className="checkout-panel-heading"><span className="checkout-panel-number">1</span><div><h2>Delivery address</h2><p>Tell us where to send your books.</p></div></div><div className="checkout-address-fields">
+                <label>Recipient name<input name="customerName" autoComplete="name" value={checkoutDraft.customerName} onChange={(event) => setCheckoutDraft((draft) => ({ ...draft, customerName: event.target.value }))} required /></label>
+                <label>Phone number<input name="phone" type="tel" autoComplete="tel" inputMode="tel" value={checkoutDraft.phone} onChange={(event) => setCheckoutDraft((draft) => ({ ...draft, phone: event.target.value }))} required placeholder="10 digit number" /></label>
+                <label className="checkout-address-field">Delivery address<textarea name="address" autoComplete="street-address" rows="3" value={checkoutDraft.address} onChange={(event) => setCheckoutDraft((draft) => ({ ...draft, address: event.target.value }))} required placeholder="House, street, city, state and PIN code" /><small>You can edit this address before continuing to payment.</small></label>
+              </div></article>
+              <article className="checkout-panel"><div className="checkout-panel-heading"><span className="checkout-panel-number">2</span><div><h2>Your books</h2><p>{cartCount} {cartCount === 1 ? "book" : "books"} in your bag · inventory checked now</p></div><button className="text-link" type="button" onClick={() => navigate("/cart")}>Edit bag</button></div>
+                {checkoutQuoteLoading ? <div className="checkout-quote-state"><span className="loader" />Checking price and availability…</div> : checkoutQuoteError ? <div className="checkout-quote-error" role="alert"><strong>We need to refresh this checkout.</strong><span>{checkoutQuoteError}</span><button type="button" className="button button-outline" onClick={() => setCheckoutQuoteRefresh((current) => current + 1)}>Refresh price and stock</button></div> : checkoutQuote ? <div className="checkout-book-list">{quoteItems.map((item) => { const cartBook = cart.find((book) => String(book.bookId ?? book.id) === String(item.bookId)) || {}; return <article className="checkout-book-row" key={item.bookId}><Cover book={{ ...cartBook, ...item, id: item.bookId, imageUrl: item.imageUrl || cartBook.imageUrl }} compact /><div className="checkout-book-copy"><strong>{item.title}</strong><span>Qty {item.quantity} · {moneyExact.format(Number(item.unitPrice || 0))} each</span></div><b>{moneyExact.format(Number(item.lineTotal || 0))}</b></article>; })}</div> : <div className="checkout-quote-state">Sign in to verify price and stock availability.</div>}
+              </article>
+            </div>
+            <aside className="checkout-order-summary"><span className="eyebrow">ORDER SUMMARY</span><div className="checkout-summary-item-count">{cartCount} {cartCount === 1 ? "book" : "books"}</div>{checkoutQuote && <><dl><div><dt>Subtotal</dt><dd>{moneyExact.format(Number(checkoutQuote.subtotal || 0))}</dd></div><div><dt>Discount</dt><dd>− {moneyExact.format(Number(checkoutQuote.discountAmount || 0))}</dd></div><div><dt>Delivery</dt><dd>{Number(checkoutQuote.deliveryAmount || 0) === 0 ? "FREE" : moneyExact.format(Number(checkoutQuote.deliveryAmount || 0))}</dd></div></dl><div className="checkout-final-total"><span>Final payable</span><strong>{moneyExact.format(Number(checkoutQuote.finalAmount || 0))}</strong><small>INR · final amount verified by the backend</small></div></>}
+              {checkoutQuoteError && <p className="checkout-summary-error">Refresh the price and stock check to continue.</p>}
+              <button className="button button-yellow button-full" type="submit" disabled={checkoutBusy || checkoutQuoteLoading || !checkoutQuote || Boolean(checkoutQuoteError) || quoteItems.length === 0}>{checkoutBusy ? "Creating your order…" : "Continue to Payment →"}</button><p className="checkout-secure-note"><span aria-hidden="true">⌑</span> You’ll choose UPI and continue to Razorpay’s secure checkout on the next page.</p><Link className="continue-link" to="/cart">Return to bag</Link>
+            </aside>
+          </form>}
+    </section>;
   }
 
   function OrdersPage() {
@@ -1284,6 +1621,7 @@ function App() {
           <Route path="/categories/fiction" element={<CatalogPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/payment/:orderRequestId" element={<PaymentPage token={token} user={user} cartItems={cart} catalogBooks={books} onPaymentSuccess={handlePaymentSuccess} />} />
           <Route path="/login" element={<section className="auth-route-page"><span className="eyebrow">YOUR MSRBOOKNEST ACCOUNT</span><h1>Welcome back to your bookshelf.</h1><p>Sign in to see your orders, keep your bag in sync and manage your used-book submissions.</p></section>} />
           <Route path="/register" element={<section className="auth-route-page"><span className="eyebrow">JOIN THE NEST</span><h1>Make the shelves yours.</h1><p>Create your account to save books and follow your orders.</p></section>} />
           <Route path="/orders" element={<OrdersPage />} />

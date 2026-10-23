@@ -11,12 +11,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Component
+@ConditionalOnProperty(name = "app.mock-payment-events-enabled", havingValue = "true")
 public class PaymentRequestListener {
     private final PaymentService paymentService;
     private final ObjectMapper objectMapper;

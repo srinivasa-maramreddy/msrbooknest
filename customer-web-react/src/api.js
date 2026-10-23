@@ -6,6 +6,7 @@ const API = {
   catalog: import.meta.env.VITE_CATALOG_API_BASE_URL || "http://localhost:8082",
   cart: import.meta.env.VITE_CART_API_BASE_URL || "http://localhost:8084",
   order: import.meta.env.VITE_ORDER_API_BASE_URL || "http://localhost:8083",
+  payment: import.meta.env.VITE_PAYMENT_API_BASE_URL || "http://localhost:8085",
   buyback: import.meta.env.VITE_BUYBACK_API_BASE_URL || "http://localhost:8086",
 };
 
@@ -78,7 +79,16 @@ const springApi = {
   removeCartItem: (token, bookId) => request(API.cart, `/api/cart/items/${bookId}`, { method: "DELETE", token }),
   clearCart: (token) => request(API.cart, "/api/cart", { method: "DELETE", token }),
   getOrders: (token) => request(API.order, "/api/orders/me", { token }),
-  placeOrder: (token, payload) => request(API.order, "/api/orders", { ...json("POST", payload), token }),
+  quoteCheckout: (token, items) => request(API.order, "/api/orders/quote", { ...json("POST", { items }), token }),
+  placeOrder: (token, payload, idempotencyKey) => request(API.order, "/api/orders", {
+    ...json("POST", payload), token, headers: { "Idempotency-Key": idempotencyKey },
+  }),
+  getOwnedOrder: (token, orderRequestId) => request(API.order, `/api/orders/me/reference/${encodeURIComponent(orderRequestId)}`, { token }),
+  createPaymentOrder: (token, orderRequestId, attemptRequestId, idempotencyKey) => request(API.payment, "/api/payments/create", {
+    ...json("POST", { orderRequestId, attemptRequestId }), token, headers: { "Idempotency-Key": idempotencyKey },
+  }),
+  verifyPayment: (token, payload) => request(API.payment, "/api/payments/verify", { ...json("POST", payload), token }),
+  getPaymentStatus: (token, orderRequestId) => request(API.payment, `/api/payments/orders/${encodeURIComponent(orderRequestId)}/status`, { token }),
   getBuybacks: (token) => request(API.buyback, "/api/buybacks", { token }),
   createBuyback: (token, payload) => request(API.buyback, "/api/buybacks", { ...json("POST", payload), token }),
   startBuybackReview: (token, id, note) => request(API.buyback, `/api/buybacks/${id}/review`, { ...json("POST", { note }), token }),
