@@ -442,13 +442,15 @@ function Cover({ book, compact = false }) {
 }
 
 function BrandEmblem() {
-  return <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 42" focusable="false">
-    <path d="M4.5 7.5c6.2-2 12.3-.4 19.1 4v18c-6-3.6-12.2-4.7-19.1-3.2v-18.8Z" fill="#174b7a" />
-    <path d="M43.5 7.5c-6.2-2-12.3-.4-19.1 4v18c6-3.6 12.2-4.7 19.1-3.2v-18.8Z" fill="#e78e16" />
-    <path d="M8 12.5c4.4-.6 8.6.7 12.2 3.1M40 12.5c-4.4-.6-8.6.7-12.2 3.1" fill="none" stroke="#fff8eb" strokeLinecap="round" strokeWidth="1.7" />
-    <path d="M5.5 29.5c9.7 8.3 27.3 8.3 37 0M9 33.1c8 5.1 21.8 5.1 30 0" fill="none" stroke="#754019" strokeLinecap="round" strokeWidth="2.7" />
-    <path d="M35.7 22.8c.4-5.6 4-9.4 8.2-10.1.5 5.1-2.6 9.3-8.2 10.1Z" fill="#4f8a35" />
-    <path d="M35.1 24.1c-3.3-3.1-3.8-7.2-1.8-10.3 3.7 2.3 4.8 6.2 1.8 10.3Z" fill="#6ca943" />
+  return <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 66 58" focusable="false">
+    <path d="M7 31c-5 5-3 12 3 17 10 9 34 11 47 2 6-4 8-10 4-16" fill="none" stroke="#754019" strokeLinecap="round" strokeWidth="5" />
+    <path d="M11 37c10 8 28 10 41 3M16 42c8 5 20 6 29 3" fill="none" stroke="#8a4b1d" strokeLinecap="round" strokeWidth="3.3" />
+    <path d="M7 8c8-2.5 16-.4 26 7v22c-9-5.3-18-6.4-26-3.5V8Z" fill="#174b7a" />
+    <path d="M33 15c9-7 17-9.5 26-7v25.5c-9-2.9-18-1.8-26 3.5V15Z" fill="#e78e16" />
+    <path d="M11 13c5-.8 10 .4 16 4.2M55 13c-5-.8-10 .4-16 4.2" fill="none" stroke="#fff8eb" strokeLinecap="round" strokeWidth="2.2" />
+    <path d="M50 39c5-5 9-14 11-24" fill="none" stroke="#4f8a35" strokeLinecap="round" strokeWidth="2.4" />
+    <path d="M57 25c.5-7 4.4-11.5 9-12 .1 6.6-3.2 11.2-9 12Z" fill="#4f8a35" />
+    <path d="M54 33c-4.7-4.8-5.1-10.4-2-14.5 5.2 3.7 6.3 9.2 2 14.5Z" fill="#71a945" />
   </svg></span>;
 }
 
