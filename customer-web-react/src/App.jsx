@@ -441,6 +441,17 @@ function Cover({ book, compact = false }) {
   );
 }
 
+function BrandEmblem() {
+  return <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 42" focusable="false">
+    <path d="M4.5 7.5c6.2-2 12.3-.4 19.1 4v18c-6-3.6-12.2-4.7-19.1-3.2v-18.8Z" fill="#174b7a" />
+    <path d="M43.5 7.5c-6.2-2-12.3-.4-19.1 4v18c6-3.6 12.2-4.7 19.1-3.2v-18.8Z" fill="#e78e16" />
+    <path d="M8 12.5c4.4-.6 8.6.7 12.2 3.1M40 12.5c-4.4-.6-8.6.7-12.2 3.1" fill="none" stroke="#fff8eb" strokeLinecap="round" strokeWidth="1.7" />
+    <path d="M5.5 29.5c9.7 8.3 27.3 8.3 37 0M9 33.1c8 5.1 21.8 5.1 30 0" fill="none" stroke="#754019" strokeLinecap="round" strokeWidth="2.7" />
+    <path d="M35.7 22.8c.4-5.6 4-9.4 8.2-10.1.5 5.1-2.6 9.3-8.2 10.1Z" fill="#4f8a35" />
+    <path d="M35.1 24.1c-3.3-3.1-3.8-7.2-1.8-10.3 3.7 2.3 4.8 6.2 1.8 10.3Z" fill="#6ca943" />
+  </svg></span>;
+}
+
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1626,7 +1637,7 @@ function App() {
       <header className="site-header">
         <div className="header-brand-group">
           <button className="header-menu-button" type="button" aria-label="Open navigation menu" aria-expanded={navigationOpen} aria-controls="site-navigation-drawer" onClick={() => setNavigationOpen(true)}><span aria-hidden="true">☰</span></button>
-          <Link className="brand" to="/" aria-label="msrbooknest home"><span className="brand-mark">m.</span><span>msrbooknest</span></Link>
+          <Link className="brand" to="/" aria-label="msrbooknest home"><BrandEmblem /><span>msrbooknest</span></Link>
         </div>
         <label className="header-search"><span aria-hidden="true">⌕</span><input value={query} onFocus={() => setShowSuggestions(true)} onBlur={() => window.setTimeout(() => setShowSuggestions(false), 160)} onChange={(event) => { setQuery(event.target.value); setShowSuggestions(true); }} onKeyDown={(event) => { if (event.key === "Enter") { setShowSuggestions(false); goToCatalog("all"); } if (event.key === "Escape") setShowSuggestions(false); }} placeholder="Search books, authors, exams, classes…" aria-label="Search the bookstore" aria-autocomplete="list" aria-expanded={showSuggestions && suggestions.length > 0} />{query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}
           {showSuggestions && suggestions.length > 0 && <div className="search-suggestions" role="listbox" aria-label="Book search suggestions">{suggestions.map((book) => <button key={book.id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(book.title); setShowSuggestions(false); goToCatalog("all"); }}><span><strong>{book.title}</strong><small>{book.author} · {book.category || "Book"}</small></span><b>{money.format(Number(book.price || 0))}</b></button>)}<button className="suggestions-all" type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { setShowSuggestions(false); goToCatalog("all"); }}>Browse all matching books ↗</button></div>}
@@ -1661,12 +1672,12 @@ function App() {
         </Routes>
       </main>
 
-      <footer className="site-footer"><Link className="brand footer-brand" to="/"><span className="brand-mark">m.</span><span>msrbooknest</span></Link><nav className="footer-nav" aria-label="Footer navigation"><Link to="/books">All books</Link><Link to="/categories">Categories</Link><Link to="/orders">Orders</Link><button type="button" onClick={openBuyback}>Sell a book</button></nav><span>Small shop, big worlds.</span><span>© 2026 msrbooknest</span></footer>
+      <footer className="site-footer"><Link className="brand footer-brand" to="/"><BrandEmblem /><span>msrbooknest</span></Link><nav className="footer-nav" aria-label="Footer navigation"><Link to="/books">All books</Link><Link to="/categories">Categories</Link><Link to="/orders">Orders</Link><button type="button" onClick={openBuyback}>Sell a book</button></nav><span>Books for a brighter you.</span><span>© 2026 msrbooknest</span></footer>
 
       {navigationOpen && <div className="nav-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setNavigationOpen(false); }}>
         <aside className="nav-drawer" id="site-navigation-drawer" role="dialog" aria-modal="true" aria-labelledby="site-navigation-title">
           <div className="nav-drawer-header">
-            <div className="nav-drawer-brand"><span className="brand-mark">m.</span><span>msrbooknest</span></div>
+            <div className="nav-drawer-brand"><BrandEmblem /><span>msrbooknest</span></div>
             <button className="close-button" type="button" onClick={() => setNavigationOpen(false)} aria-label="Close navigation menu">×</button>
           </div>
           <div className="nav-drawer-title"><span className="eyebrow">BROWSE BOOKS</span><h2 id="site-navigation-title">Find your shelf</h2><p>Choose a shelf to find your next good read.</p></div>
@@ -1709,7 +1720,7 @@ function App() {
 
       {authOpen && <div className={authRoute ? "auth-route-overlay" : "overlay modal-overlay"} onMouseDown={(event) => { if (event.target === event.currentTarget) closeAuth(); }}>
         <section className="dialog" aria-labelledby="auth-title">
-          <div className="dialog-top"><span className="brand-mark">m.</span><button className="close-button" onClick={closeAuth} aria-label="Close sign in">×</button></div>
+          <div className="dialog-top"><BrandEmblem /><button className="close-button" onClick={closeAuth} aria-label="Close sign in">×</button></div>
           <span className="eyebrow">{authMode === "login" ? "WELCOME BACK" : authMode === "register" ? registrationStep === "details" ? "JOIN THE NEST" : "ACCOUNT VERIFICATION" : "ACCOUNT RECOVERY"}</span>
           <h2 id="auth-title">{authMode === "login" ? "Good to see you." : authMode === "forgot" ? "Forgot your password?" : authMode === "reset" ? "Check your email." : registrationStep === "details" ? "Let’s make it official." : registrationStep === "phone" ? "Verify your phone." : registrationStep === "emailReady" ? "Verify your email." : "Enter your email code."}</h2>
           <p className="dialog-intro">{authMode === "login" ? "Sign in to pick up where your last story left off." : authMode === "forgot" ? "Enter the email or mobile number on your account. We’ll send a one-time code to your registered email." : authMode === "reset" ? recoveryMaskedEmail ? `Enter the code sent to ${recoveryMaskedEmail}, then choose a new password.` : "If an account matches those details, a code was sent to its registered email. Enter it below to continue." : registrationStep === "details" ? "Create your account and make the shelves yours." : registrationStep === "phone" ? `Enter the 6-digit code for ${registration.phoneNumber}.` : registrationStep === "emailReady" ? `Your phone is verified. Send a code to ${registration.email} to finish creating your account.` : `Enter the 6-digit code sent to ${registration.email}.`}</p>
