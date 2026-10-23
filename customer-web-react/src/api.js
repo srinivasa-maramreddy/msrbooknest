@@ -55,6 +55,20 @@ const springApi = {
   sendRegistrationEmailOtp: (payload) => request(API.auth, "/api/auth/register/email/send-otp", json("POST", payload)),
   completeOtpRegistration: (payload) => request(API.auth, "/api/auth/register/complete", json("POST", payload)),
   getBooks: (query = "") => request(API.catalog, `/api/products${query ? `?q=${encodeURIComponent(query)}` : ""}`),
+  getBook: (id) => request(API.catalog, `/api/products/${encodeURIComponent(id)}`),
+  getRelatedBooks: (id) => request(API.catalog, `/api/products/${encodeURIComponent(id)}/related`),
+  getReviews: (id, params = {}, token) => {
+    const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
+    const search = query.toString();
+    return request(API.catalog, `/api/books/${encodeURIComponent(id)}/reviews${search ? `?${search}` : ""}`, { token });
+  },
+  addReview: (token, id, payload) => request(API.catalog, `/api/books/${encodeURIComponent(id)}/reviews`, { ...json("POST", payload), token }),
+  updateReview: (token, id, reviewId, payload) => request(API.catalog, `/api/books/${encodeURIComponent(id)}/reviews/${reviewId}`, { ...json("PUT", payload), token }),
+  deleteReview: (token, id, reviewId) => request(API.catalog, `/api/books/${encodeURIComponent(id)}/reviews/${reviewId}`, { method: "DELETE", token }),
+  getWishlist: (token) => request(API.cart, "/api/wishlist", { token }),
+  addWishlistItem: (token, bookId) => request(API.cart, `/api/wishlist/items/${encodeURIComponent(bookId)}`, { method: "POST", token }),
+  removeWishlistItem: (token, bookId) => request(API.cart, `/api/wishlist/items/${encodeURIComponent(bookId)}`, { method: "DELETE", token }),
+  getReviewEligibility: (token, bookId) => request(API.order, `/api/orders/me/review-eligibility/${encodeURIComponent(bookId)}`, { token }),
   createProduct: (token, payload) => request(API.catalog, "/api/admin/products", { ...json("POST", payload), token }),
   updateProduct: (token, id, payload) => request(API.catalog, `/api/admin/products/${id}`, { ...json("PUT", payload), token }),
   deleteProduct: (token, id) => request(API.catalog, `/api/admin/products/${id}`, { method: "DELETE", token }),

@@ -9,8 +9,18 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface BookRepository extends JpaRepository<Book, Long> {
+    @Query("""
+            select b from Book b
+            where b.id <> :bookId
+              and ((:subcategory is not null and lower(b.subcategory) = lower(:subcategory))
+                   or (:category is not null and lower(b.category) = lower(:category)))
+            order by b.isBestSeller desc, b.title asc
+            """)
+    List<Book> findRelated(@Param("bookId") Long bookId, @Param("category") String category,
+                           @Param("subcategory") String subcategory, Pageable pageable);
     boolean existsByTitleIgnoreCase(String title);
     @Modifying
     @Transactional

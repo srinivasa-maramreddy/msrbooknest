@@ -92,6 +92,11 @@ function cartKey() {
   return user?.email ? `msrbooknest_pages_cart:${user.email.toLowerCase()}` : GUEST_CART_KEY;
 }
 
+function wishlistKey() {
+  const user = requireUser();
+  return `msrbooknest_pages_wishlist:${user.email.toLowerCase()}`;
+}
+
 function allProducts() {
   return [...DEMO_BOOKS, ...read(PRODUCTS_KEY, [])];
 }
@@ -243,6 +248,71 @@ export const demoApi = {
     return clone(term ? products.filter((book) => `${book.title} ${book.author} ${book.description} ${book.category}`.toLowerCase().includes(term)) : products);
   },
 
+  async getBook(id) {
+    const book = allProducts().find((item) => String(item.id) === String(id));
+    if (!book) throw new Error("This book is not in the demo catalog.");
+    return clone(book);
+  },
+
+  async getRelatedBooks(id) {
+    const book = allProducts().find((item) => String(item.id) === String(id));
+    if (!book) throw new Error("This book is not in the demo catalog.");
+    return clone(allProducts().filter((item) => String(item.id) !== String(id)
+      && (item.category === book.category || (book.subcategory && item.subcategory === book.subcategory)))
+      .slice(0, 8));
+  },
+
+  async getReviews(_id, params = {}) {
+    return {
+      averageRating: 0,
+      reviewCount: 0,
+      ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+      reviews: [],
+      page: Number(params.page) || 0,
+      size: Number(params.size) || 5,
+      hasMore: false,
+      myReview: null,
+    };
+  },
+
+  async getReviewEligibility() {
+    requireUser();
+    return { eligible: false, reason: "The browser-only demo cannot verify delivered orders." };
+  },
+
+  async addReview() {
+    throw new Error("Verified-purchase reviews are unavailable in the browser-only demo. Run the Spring Boot services to verify delivered orders.");
+  },
+
+  async updateReview() {
+    throw new Error("Review editing is unavailable in the browser-only demo. Run the Spring Boot services to manage verified reviews.");
+  },
+
+  async deleteReview() {
+    throw new Error("Review deletion is unavailable in the browser-only demo. Run the Spring Boot services to manage verified reviews.");
+  },
+
+  async getWishlist() {
+    requireUser();
+    return clone(read(wishlistKey(), []));
+  },
+
+  async addWishlistItem(_token, bookId) {
+    requireUser();
+    if (!allProducts().some((book) => String(book.id) === String(bookId))) throw new Error("That book is not in the demo catalog.");
+    const key = wishlistKey();
+    const ids = read(key, []);
+    if (!ids.some((id) => String(id) === String(bookId))) ids.unshift(bookId);
+    return clone(write(key, ids));
+  },
+
+  async removeWishlistItem(_token, bookId) {
+    requireUser();
+    const key = wishlistKey();
+    const ids = read(key, []).filter((id) => String(id) !== String(bookId));
+    return clone(write(key, ids));
+  },
+
   async createProduct(_token, payload) {
     requireAdmin();
     const products = read(PRODUCTS_KEY, []);
@@ -274,10 +344,12 @@ export const demoApi = {
     const qty = Math.max(1, Math.floor(Number(quantity) || 1));
     const cart = getCart();
     const match = cart.find((item) => String(item.bookId) === String(bookId));
+    const book = allProducts().find((item) => String(item.id) === String(bookId));
+    if (!book) throw new Error("That book is not in the demo catalog.");
+    if (match && Number(book.stock) < match.quantity + qty) throw new Error("Requested quantity exceeds available stock.");
+    if (!match && qty > Number(book.stock)) throw new Error("Requested quantity exceeds available stock.");
     if (match) match.quantity += qty;
     else {
-      const book = allProducts().find((item) => String(item.id) === String(bookId));
-      if (!book) throw new Error("That book is not in the demo catalog.");
       cart.push({ bookId: book.id, title: book.title, author: book.author, imageUrl: book.imageUrl, unitPrice: book.price, quantity: qty });
     }
     return clone(saveCart(cart));
@@ -285,7 +357,10 @@ export const demoApi = {
 
   async updateCartItem(_token, bookId, quantity) {
     requireUser();
-    const cart = getCart().map((item) => String(item.bookId) === String(bookId) ? { ...item, quantity: Math.max(1, Math.floor(Number(quantity) || 1)) } : item);
+    const qty = Math.max(1, Math.floor(Number(quantity) || 1));
+    const book = allProducts().find((item) => String(item.id) === String(bookId));
+    if (!book || qty > Number(book.stock)) throw new Error("Requested quantity exceeds available stock.");
+    const cart = getCart().map((item) => String(item.bookId) === String(bookId) ? { ...item, quantity: qty, unitPrice: book.price } : item);
     return clone(saveCart(cart));
   },
 

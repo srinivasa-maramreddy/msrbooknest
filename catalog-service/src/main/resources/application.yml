@@ -31,3 +31,5 @@ app:
   jwt:
     secret: ${APP_JWT_SECRET:msrbooknest-demo-signing-key-change-me}
   web-origins: ${APP_WEB_ORIGINS:http://localhost:5173}
+  services:
+    order-base-url: ${ORDER_SERVICE_BASE_URL:http://localhost:8083}

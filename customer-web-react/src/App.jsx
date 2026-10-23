@@ -3,7 +3,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-r
 import { api } from "./api.js";
 import { clearSession, getAccessToken, getIdentity, saveSession, subscribeIdentity } from "./auth.js";
 import BuybackDashboard from "./BuybackDashboard.jsx";
-import { BOOK_PAGE_SIZE, CATALOG_CATEGORIES, readBookSpecifications, readWishlist } from "./catalog.js";
+import { BOOK_PAGE_SIZE, CATALOG_CATEGORIES, readBookSpecifications } from "./catalog.js";
 
 const STATIC_PAGES_DEMO = import.meta.env.VITE_DEMO_MODE === "true";
 const CART_KEY = "booknest_react_guest_cart";
@@ -146,6 +146,7 @@ function App() {
   const buybackView = location.pathname === "/buyback";
   const adminOpen = location.pathname === "/admin";
   const authRoute = location.pathname === "/login" || location.pathname === "/register";
+  const bookDetailId = location.pathname.startsWith("/books/") ? decodeURIComponent(location.pathname.slice("/books/".length)) : "";
   const [books, setBooks] = useState([]);
   const [booksLoading, setBooksLoading] = useState(true);
   const [booksError, setBooksError] = useState("");
@@ -159,12 +160,32 @@ function App() {
   const [conditionFilter, setConditionFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [wishlistIds, setWishlistIds] = useState(readWishlist);
-  const [wishlistOpen, setWishlistOpen] = useState(false);
+  const [wishlistIds, setWishlistIds] = useState([]);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [navigationExpandedGroup, setNavigationExpandedGroup] = useState("");
   const [navigationMoreOpen, setNavigationMoreOpen] = useState(false);
-  const [activeProduct, setActiveProduct] = useState(null);
+  const [detailBook, setDetailBook] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const [detailRetry, setDetailRetry] = useState(0);
+  const [relatedBooks, setRelatedBooks] = useState([]);
+  const [relatedError, setRelatedError] = useState("");
+  const [detailQuantity, setDetailQuantity] = useState(1);
+  const [imageZoomOpen, setImageZoomOpen] = useState(false);
+  const [reviewData, setReviewData] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSort, setReviewSort] = useState("newest");
+  const [reviewFilter, setReviewFilter] = useState("");
+  const [reviewPage, setReviewPage] = useState(0);
+  const [reviewRefresh, setReviewRefresh] = useState(0);
+  const [reviewEligible, setReviewEligible] = useState(false);
+  const [reviewEligibilityLoading, setReviewEligibilityLoading] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewDraft, setReviewDraft] = useState({ rating: 5, title: "", comment: "" });
+  const [pendingAuthAction, setPendingAuthAction] = useState(null);
+  const [authReturnTo, setAuthReturnTo] = useState("/orders");
   const [editingProduct, setEditingProduct] = useState(null);
   const [adminQuery, setAdminQuery] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
@@ -279,8 +300,89 @@ function App() {
   }, [cart, token]);
 
   useEffect(() => {
-    localStorage.setItem("msrbooknest_wishlist", JSON.stringify(wishlistIds));
-  }, [wishlistIds]);
+    if (!token) {
+      setWishlistIds([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setWishlistLoading(true);
+    api.getWishlist(token)
+      .then((ids) => { if (!cancelled) setWishlistIds(Array.isArray(ids) ? ids : []); })
+      .catch((error) => { if (!cancelled) showToast(error.message); })
+      .finally(() => { if (!cancelled) setWishlistLoading(false); });
+    return () => { cancelled = true; };
+  }, [token]);
+
+  useEffect(() => {
+    if (!bookDetailId) {
+      setDetailBook(null);
+      setDetailError("");
+      setDetailQuantity(1);
+      setImageZoomOpen(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailError("");
+    setDetailBook(null);
+    api.getBook(bookDetailId)
+      .then((book) => { if (!cancelled) { setDetailBook(book); setDetailQuantity(1); } })
+      .catch((error) => { if (!cancelled) setDetailError(error.message || "Could not load this book."); })
+      .finally(() => { if (!cancelled) setDetailLoading(false); });
+    return () => { cancelled = true; };
+  }, [bookDetailId, detailRetry]);
+
+  useEffect(() => {
+    if (!bookDetailId) return undefined;
+    let cancelled = false;
+    setRelatedBooks([]);
+    setRelatedError("");
+    api.getRelatedBooks(bookDetailId)
+      .then((items) => { if (!cancelled) setRelatedBooks(Array.isArray(items) ? items : []); })
+      .catch((error) => { if (!cancelled) setRelatedError(error.message || "Could not load similar books."); });
+    return () => { cancelled = true; };
+  }, [bookDetailId]);
+
+  useEffect(() => {
+    setReviewData(null);
+    setReviewError("");
+    setReviewPage(0);
+    setReviewFilter("");
+    setReviewSort("newest");
+    setReviewDraft({ rating: 5, title: "", comment: "" });
+  }, [bookDetailId]);
+
+  useEffect(() => {
+    if (!bookDetailId) {
+      setReviewData(null);
+      setReviewError("");
+      return undefined;
+    }
+    let cancelled = false;
+    setReviewLoading(true);
+    setReviewError("");
+    api.getReviews(bookDetailId, { page: reviewPage, size: 5, rating: reviewFilter || undefined, sort: reviewSort }, token)
+      .then((data) => { if (!cancelled) setReviewData(data); })
+      .catch((error) => { if (!cancelled) setReviewError(error.message || "Could not load reviews."); })
+      .finally(() => { if (!cancelled) setReviewLoading(false); });
+    return () => { cancelled = true; };
+  }, [bookDetailId, reviewPage, reviewFilter, reviewSort, reviewRefresh, token]);
+
+  useEffect(() => {
+    if (!bookDetailId || !token) {
+      setReviewEligible(false);
+      setReviewEligibilityLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setReviewEligible(false);
+    setReviewEligibilityLoading(true);
+    api.getReviewEligibility(token, bookDetailId)
+      .then((result) => { if (!cancelled) setReviewEligible(Boolean(result?.eligible)); })
+      .catch(() => { if (!cancelled) setReviewEligible(false); })
+      .finally(() => { if (!cancelled) setReviewEligibilityLoading(false); });
+    return () => { cancelled = true; };
+  }, [bookDetailId, token]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -387,7 +489,7 @@ function App() {
 
   const totalPages = Math.max(1, Math.ceil(filteredBooks.length / BOOK_PAGE_SIZE));
   const visibleBooks = filteredBooks.slice((page - 1) * BOOK_PAGE_SIZE, page * BOOK_PAGE_SIZE);
-  const wishlistBooks = books.filter((book) => wishlistIds.includes(book.id));
+  const wishlistBooks = books.filter((book) => isWishlisted(book.id));
   const suggestions = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (term.length < 2) return [];
@@ -450,43 +552,66 @@ function App() {
     setToast(message);
   }
 
-  function toggleWishlist(book) {
-    setWishlistIds((current) => current.includes(book.id)
-      ? current.filter((id) => id !== book.id)
-      : [...current, book.id]);
-    showToast(wishlistIds.includes(book.id) ? "Removed from your wishlist" : "Saved to your wishlist");
+  function isWishlisted(bookId) {
+    return wishlistIds.some((id) => String(id) === String(bookId));
   }
 
-  async function buyNow(book) {
-    await addToCart(book);
-    setActiveProduct(null);
+  async function toggleWishlist(book) {
+    if (!token) {
+      const returnTo = location.pathname;
+      setPendingAuthAction({ type: "wishlist", bookId: book.id, returnTo });
+      openAuth("login", returnTo);
+      showToast("Sign in to save books to your account wishlist.");
+      return;
+    }
+    try {
+      const wasSaved = isWishlisted(book.id);
+      const updated = wasSaved
+        ? await api.removeWishlistItem(token, book.id)
+        : await api.addWishlistItem(token, book.id);
+      setWishlistIds(Array.isArray(updated) ? updated : []);
+      showToast(wasSaved ? "Removed from your wishlist" : "Saved to your wishlist");
+    } catch (error) {
+      showToast(error.message || "Could not update your wishlist.");
+    }
+  }
+
+  async function buyNow(book, quantity = 1) {
+    const added = await addToCart(book, quantity);
+    if (!added) return;
     navigate("/checkout");
   }
 
-  async function addToCart(book) {
+  async function addToCart(book, quantity = 1) {
+    const amount = Math.max(1, Math.floor(Number(quantity) || 1));
     try {
       if (token) {
-        const updated = await api.addCartItem(token, book.id, 1);
+        const updated = await api.addCartItem(token, book.id, amount);
         setCart(Array.isArray(updated) ? updated : []);
       } else {
-        setCart((current) => {
-          const match = current.find((item) => item.bookId === book.id);
-          if (match) {
-            return current.map((item) => item.bookId === book.id ? { ...item, quantity: item.quantity + 1 } : item);
-          }
-          return [...current, {
+        const currentQuantity = Number(cart.find((item) => String(item.bookId) === String(book.id))?.quantity || 0);
+        if (Number(book.stock || 0) < currentQuantity + amount) {
+          showToast(`Only ${Number(book.stock || 0)} copies are available.`);
+          return false;
+        }
+        const exists = cart.some((item) => String(item.bookId) === String(book.id));
+        setCart((current) => exists
+          ? current.map((item) => String(item.bookId) === String(book.id)
+            ? { ...item, quantity: Number(item.quantity || 0) + amount } : item)
+          : [...current, {
             bookId: book.id,
             title: book.title,
             author: book.author,
             imageUrl: book.imageUrl,
             unitPrice: book.price,
-            quantity: 1,
-          }];
-        });
+            quantity: amount,
+          }]);
       }
-      showToast(`${book.title} added to your bag`);
+      showToast(`${book.title} × ${amount} added to your bag`);
+      return true;
     } catch (error) {
       showToast(error.message);
+      return false;
     }
   }
 
@@ -498,12 +623,73 @@ function App() {
           : await api.updateCartItem(token, item.bookId, quantity);
         setCart(Array.isArray(updated) ? updated : []);
       } else {
+        const book = books.find((entry) => String(entry.id) === String(item.bookId));
+        if (quantity > Number(book?.stock || 0)) {
+          showToast(`Only ${Number(book?.stock || 0)} copies are available.`);
+          return;
+        }
         setCart((current) => quantity < 1
           ? current.filter((entry) => entry.bookId !== item.bookId)
           : current.map((entry) => entry.bookId === item.bookId ? { ...entry, quantity } : entry));
       }
     } catch (error) {
       showToast(error.message);
+    }
+  }
+
+  function requestReviewSignIn() {
+    setPendingAuthAction({ type: "review", returnTo: location.pathname });
+    openAuth("login", location.pathname);
+  }
+
+  async function submitReview(event) {
+    event.preventDefault();
+    if (!token) {
+      requestReviewSignIn();
+      return;
+    }
+    setReviewSubmitting(true);
+    setReviewError("");
+    try {
+      const payload = { rating: Number(reviewDraft.rating), title: reviewDraft.title.trim(), comment: reviewDraft.comment.trim() };
+      if (reviewData?.myReview) await api.updateReview(token, bookDetailId, reviewData.myReview.id, payload);
+      else await api.addReview(token, bookDetailId, payload);
+      setReviewDraft({ rating: 5, title: "", comment: "" });
+      setReviewPage(0);
+      setReviewRefresh((current) => current + 1);
+      showToast(reviewData?.myReview ? "Your review was updated." : "Thanks for sharing your review.");
+    } catch (error) {
+      setReviewError(error.message || "Could not save your review.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
+
+  async function deleteReview() {
+    if (!token || !reviewData?.myReview) return;
+    setReviewSubmitting(true);
+    setReviewError("");
+    try {
+      await api.deleteReview(token, bookDetailId, reviewData.myReview.id);
+      setReviewDraft({ rating: 5, title: "", comment: "" });
+      setReviewRefresh((current) => current + 1);
+      showToast("Your review was removed.");
+    } catch (error) {
+      setReviewError(error.message || "Could not remove your review.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
+
+  async function moveWishlistBookToCart(book) {
+    const added = await addToCart(book);
+    if (!added || !token) return;
+    try {
+      const updated = await api.removeWishlistItem(token, book.id);
+      setWishlistIds(Array.isArray(updated) ? updated : []);
+      showToast("Book moved to your bag.");
+    } catch (error) {
+      showToast(error.message || "Added to bag, but could not remove it from the wishlist.");
     }
   }
 
@@ -558,19 +744,39 @@ function App() {
     }
   }
 
-  function openAuth(mode = "login") {
+  function openAuth(mode = "login", returnTo = location.pathname) {
     setRegistration(EMPTY_REGISTRATION);
     setRegistrationStep("details");
     setRegistrationId("");
     setPhoneDemoOtp("");
     setEmailDemoOtp("");
+    setAuthReturnTo(returnTo || "/orders");
     setAuthMode(mode);
     setAuthOpen(true);
     navigate(mode === "register" ? "/register" : "/login");
   }
 
+  async function completeAuthentication(response, displayName) {
+    saveSession(response, displayName);
+    setAuthOpen(false);
+    resetRegistration();
+    const pending = pendingAuthAction;
+    if (pending?.type === "wishlist") {
+      try {
+        const updated = await api.addWishlistItem(response.token, pending.bookId);
+        setWishlistIds(Array.isArray(updated) ? updated : []);
+        showToast("Saved to your wishlist.");
+      } catch (error) {
+        showToast(error.message || "Sign-in succeeded, but the book could not be saved. Try again.");
+      }
+    }
+    setPendingAuthAction(null);
+    navigate(pending?.returnTo || authReturnTo || "/orders");
+  }
+
   function closeAuth() {
     setAuthOpen(false);
+    setPendingAuthAction(null);
     if (authRoute) navigate("/");
   }
 
@@ -720,10 +926,7 @@ function App() {
           password: registration.password,
           confirmPassword: registration.confirmPassword,
         });
-        saveSession(response, registration.name);
-        setAuthOpen(false);
-        resetRegistration();
-        navigate("/orders");
+        await completeAuthentication(response, registration.name);
         showToast("Your verified account is ready. Welcome to the nest.");
         return;
       }
@@ -732,10 +935,7 @@ function App() {
         identifier: form.get("identifier").trim(),
         password: form.get("password"),
       });
-      saveSession(response);
-      setAuthOpen(false);
-      resetRegistration();
-      navigate("/orders");
+      await completeAuthentication(response);
       showToast("Welcome back to the nest.");
     } catch (error) {
       showToast(error.message || (registering ? "Could not verify your account." : "Could not sign in to msrbooknest."));
@@ -805,7 +1005,11 @@ function App() {
       title: String(form.get("title") || "").trim(),
       author: String(form.get("author") || "").trim(),
       description: String(form.get("description") || "").trim(),
+      synopsis: String(form.get("synopsis") || "").trim(),
+      intendedAudience: String(form.get("intendedAudience") || "").trim(),
+      publicationDate: form.get("publicationDate") || null,
       price: Number(form.get("price")),
+      originalPrice: form.get("originalPrice") ? Number(form.get("originalPrice")) : null,
       stock: Number(form.get("stock")),
       category: String(form.get("category") || "").trim(),
       subcategory: String(form.get("subcategory") || "").trim(),
@@ -864,6 +1068,7 @@ function App() {
             <label>Category<select name="category" defaultValue={editingProduct.category || "School Books"}>{CATALOG_CATEGORIES.map((category) => <option key={category.name}>{category.name}</option>)}<option>History & Ideas</option><option>Study Bundles</option></select></label>
             <label>Subcategory<input name="subcategory" maxLength="160" defaultValue={editingProduct.subcategory || ""} /></label>
             <label>Price (₹)<input name="price" type="number" min="0.01" step="0.01" required defaultValue={editingProduct.price || ""} /></label>
+            <label>Original price (₹)<input name="originalPrice" type="number" min="0.01" step="0.01" defaultValue={editingProduct.originalPrice || ""} /></label>
             <label>Stock<input name="stock" type="number" min="0" step="1" required defaultValue={editingProduct.stock ?? 1} /></label>
             <label>Condition<select name="conditionLabel" defaultValue={editingProduct.conditionLabel || "New"}><option>New</option><option>Used · Like New</option><option>Used · Very Good</option><option>Used · Good</option><option>Used · Acceptable</option></select></label>
             <label>Publisher<input name="publisher" maxLength="160" defaultValue={editingProduct.publisher || ""} /></label>
@@ -873,6 +1078,9 @@ function App() {
             <label>ISBN (verified only)<input name="isbn" maxLength="40" defaultValue={editingProduct.isbn || ""} /></label>
             <label className="admin-form-wide">Cover image URL<input name="imageUrl" type="url" maxLength="1200" defaultValue={editingProduct.imageUrl || ""} /></label>
             <label className="admin-form-wide">Description<textarea name="description" maxLength="2000" rows="3" defaultValue={editingProduct.description || ""} /></label>
+            <label className="admin-form-wide">Synopsis<textarea name="synopsis" maxLength="4000" rows="3" defaultValue={editingProduct.synopsis || ""} /></label>
+            <label>Intended audience<input name="intendedAudience" maxLength="500" defaultValue={editingProduct.intendedAudience || ""} /></label>
+            <label>Publication date<input name="publicationDate" type="date" defaultValue={editingProduct.publicationDate || ""} /></label>
             <label className="admin-form-wide">Product attributes (JSON)<textarea name="specifications" rows="3" defaultValue={editingProduct.specifications || "{}"} /></label>
             <label className="admin-form-wide">Listing note<input name="listingNote" maxLength="120" defaultValue={editingProduct.listingNote || ""} /></label>
             <label className="admin-checkbox"><input name="isNewArrival" type="checkbox" defaultChecked={Boolean(editingProduct.isNewArrival)} /> New arrival</label>
@@ -892,12 +1100,17 @@ function App() {
   function BookCard({ book }) {
     const examPrep = isExamPrepBook(book);
     const used = String(book.conditionLabel || "").startsWith("Used");
-    const isWishlisted = wishlistIds.includes(book.id);
+    const bookHref = `/books/${encodeURIComponent(book.id)}`;
+    const saved = isWishlisted(book.id);
+    const cardNavigation = (event) => {
+      if (event.target.closest("button, a, input, select, textarea")) return;
+      navigate(bookHref);
+    };
     return (
-      <article className="book-card">
+      <article className="book-card book-card-clickable" onClick={cardNavigation}>
         <div className="book-card-art">
-          <Cover book={book} />
-          <button className={isWishlisted ? "wishlist-heart saved" : "wishlist-heart"} type="button" aria-label={isWishlisted ? `Remove ${book.title} from wishlist` : `Save ${book.title} to wishlist`} aria-pressed={isWishlisted} onClick={() => toggleWishlist(book)}>{isWishlisted ? "♥" : "♡"}</button>
+          <Link className="book-card-cover-link" to={bookHref} aria-label={`View ${book.title} details`}><Cover book={book} /></Link>
+          <button className={saved ? "wishlist-heart saved" : "wishlist-heart"} type="button" aria-label={saved ? `Remove ${book.title} from wishlist` : `Save ${book.title} to wishlist`} aria-pressed={saved} onClick={() => toggleWishlist(book)}>{saved ? "♥" : "♡"}</button>
           {examPrep && <span className="book-badge exam-prep-badge">NEET · JEE</span>}
           {used && <span className="book-badge used-book-badge">Pre-loved</span>}
           {!examPrep && !used && book.isNewArrival && <span className="book-badge">Just in</span>}
@@ -905,7 +1118,7 @@ function App() {
         </div>
         <div className="book-card-copy">
           <div className="book-meta"><span className={examPrep ? "exam-prep-meta" : ""}>{book.conditionLabel || "New"}</span><span>{book.stock > 0 ? `${book.stock} in stock` : "Sold out"}</span></div>
-          <h3>{book.title}</h3>
+          <h3><Link className="book-card-title-link" to={bookHref}>{book.title}</Link></h3>
           <p className="book-author">by {book.author}</p>
           <span className="demo-listing-tag">{String(book.listingNote || "").toLowerCase().includes("demo") ? "DEMO LISTING" : "DETAILS UNVERIFIED"}</span>
           <p className="book-card-category">{book.category || "Books"}{book.subcategory ? ` · ${book.subcategory}` : ""}</p>
@@ -966,10 +1179,79 @@ function App() {
   }
 
   function BookDetailsPage() {
-    const id = decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "");
-    const book = books.find((entry) => String(entry.id) === id);
-    if (!book) return <section className="route-content catalog-message"><strong>Book not found.</strong><button className="button button-dark" onClick={() => goToCatalog("all")}>Browse books</button></section>;
-    return <section className="route-content product-route-page"><button className="continue-link" onClick={() => navigate(-1)}>← Back to the shelves</button><article className="product-detail-dialog product-detail-page"><div className="product-detail-art"><Cover book={book} /></div><div className="product-detail-copy"><span className="eyebrow">{book.category || "BOOKS"}{book.subcategory ? ` · ${book.subcategory}` : ""}</span><h1>{book.title}</h1><p className="product-detail-author">by {book.author}</p><div className="product-detail-price"><strong>{money.format(Number(book.price || 0))}</strong><span>{book.stock > 0 ? `${book.stock} demo units available` : "Currently out of stock"}</span></div><p className="product-detail-description">{book.description || "A book for your next chapter."}</p><dl className="product-detail-facts"><div><dt>Condition</dt><dd>{book.conditionLabel || "New"}</dd></div><div><dt>Publisher</dt><dd>{book.publisher || "Not verified"}</dd></div><div><dt>Edition</dt><dd>{book.edition || "Not verified"}</dd></div><div><dt>Language</dt><dd>{book.language || "Not specified"}</dd></div><div><dt>Format</dt><dd>{book.format || "Book"}</dd></div><div><dt>ISBN</dt><dd>{book.isbn || "Not provided · unverified"}</dd></div></dl><p className="product-listing-note">{book.listingNote || "Demo sample · verify publisher details and edition before purchase."}</p><div className="product-detail-actions"><button className="button button-outline" type="button" onClick={() => toggleWishlist(book)}>{wishlistIds.includes(book.id) ? "♥ Saved" : "♡ Wishlist"}</button><button className="button button-outline" type="button" onClick={() => addToCart(book)}>Add to bag</button><button className="button button-dark" type="button" disabled={!book.stock} onClick={() => buyNow(book)}>Buy now ↗</button></div></div></article></section>;
+    if (detailLoading) return <section className="route-content detail-loading-page" aria-label="Loading book details"><div className="detail-skeleton detail-skeleton-cover" /><div className="detail-skeleton-copy"><span /><span /><span /><span /><span /></div></section>;
+    if (detailError) return <section className="route-content detail-state-page"><span className="eyebrow">BOOK DETAILS</span><h1>We couldn’t load this book.</h1><p>{detailError}</p><div className="detail-state-actions"><button className="button button-dark" onClick={() => setDetailRetry((current) => current + 1)}>Try again</button><button className="button button-outline" onClick={() => goToCatalog("all")}>Browse books</button></div></section>;
+    if (!detailBook) return <section className="route-content detail-state-page"><span className="eyebrow">BOOK DETAILS</span><h1>Book not found.</h1><p>This title may have been removed from the catalog.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Browse books</button></section>;
+
+    const book = detailBook;
+    const specs = readBookSpecifications(book);
+    const currentPrice = Number(book.price || 0);
+    const originalPrice = Number(book.originalPrice || 0);
+    const quantityInCart = Number(cart.find((item) => String(item.bookId) === String(book.id))?.quantity || 0);
+    const maxAddableQuantity = Math.max(0, Number(book.stock || 0) - quantityInCart);
+    const selectedQuantity = maxAddableQuantity > 0 ? Math.min(detailQuantity, maxAddableQuantity) : 0;
+    const discount = originalPrice > currentPrice && originalPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
+    const topics = specs.keyTopics || specs.topics || specs.subjects || specs.subject || specs.exam;
+    const topicLabels = Array.isArray(topics) ? topics : topics ? String(topics).split(/[,;|]/).map((value) => value.trim()).filter(Boolean) : [];
+    const reviewCount = Number(reviewData?.reviewCount || 0);
+    const reviewStars = (rating) => <span className="review-stars" aria-label={`${rating} out of 5 stars`}>{"★".repeat(Math.max(0, Math.min(5, Math.round(Number(rating) || 0))))}{"☆".repeat(5 - Math.max(0, Math.min(5, Math.round(Number(rating) || 0))))}</span>;
+    return <section className="route-content product-route-page">
+      <button className="continue-link detail-back-link" onClick={() => navigate(-1)}>← Back to the shelves</button>
+      <article className="product-detail-dialog product-detail-page">
+        <div className="product-detail-art"><button className="detail-cover-zoom" type="button" onClick={() => setImageZoomOpen(true)} aria-label={`Preview the cover of ${book.title}`}><Cover book={book} /></button><span className="cover-zoom-hint">Tap to enlarge</span></div>
+        <div className="product-detail-copy">
+          <span className="eyebrow">{book.category || "BOOKS"}{book.subcategory ? ` · ${book.subcategory}` : ""}</span>
+          <h1>{book.title}</h1>
+          <p className="product-detail-author">by {book.author || "Author not listed"}</p>
+          <a className="detail-rating-link" href="#customer-reviews" aria-label={`${reviewCount} customer reviews`}>{reviewStars(reviewData?.averageRating)} <strong>{reviewCount ? Number(reviewData.averageRating).toFixed(1) : "No ratings yet"}</strong><span>{reviewCount ? `${reviewCount} review${reviewCount === 1 ? "" : "s"}` : "Be the first to review"}</span></a>
+          <div className="detail-divider" />
+          <div className="product-detail-price"><strong>{money.format(currentPrice)}</strong>{discount > 0 && <><del>{money.format(originalPrice)}</del><span className="detail-discount">{discount}% off</span></>}</div>
+          {book.stock > 0 ? <p className="detail-stock detail-stock-available">In stock · {book.stock} available</p> : <p className="detail-stock detail-stock-unavailable">Currently out of stock</p>}
+          {specs.deliveryEstimate && <p className="detail-delivery">Estimated delivery: {String(specs.deliveryEstimate)}</p>}
+          <p className="product-detail-description">{book.description || "A book for your next chapter."}</p>
+          {book.synopsis && <div className="detail-synopsis"><h2>About this book</h2><p>{book.synopsis}</p></div>}
+          <dl className="product-detail-facts">
+            <div><dt>Category</dt><dd>{book.category || "Not listed"}</dd></div>
+            {book.subcategory && <div><dt>Genre / subject</dt><dd>{book.subcategory}</dd></div>}
+            {book.conditionLabel && <div><dt>Condition</dt><dd>{book.conditionLabel}</dd></div>}
+            {book.publisher && <div><dt>Publisher</dt><dd>{book.publisher}</dd></div>}
+            {book.isbn && <div><dt>ISBN</dt><dd>{book.isbn}</dd></div>}
+            {book.language && <div><dt>Language</dt><dd>{book.language}</dd></div>}
+            {book.edition && <div><dt>Edition</dt><dd>{book.edition}</dd></div>}
+            {book.publicationDate && <div><dt>Published</dt><dd>{new Date(book.publicationDate).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}</dd></div>}
+            {book.format && <div><dt>Format</dt><dd>{book.format}</dd></div>}
+            {book.intendedAudience && <div><dt>Intended audience</dt><dd>{book.intendedAudience}</dd></div>}
+          </dl>
+          {topicLabels.length > 0 && <div className="detail-topics"><strong>Key topics</strong><div>{topicLabels.map((topic) => <span key={topic}>{topic}</span>)}</div></div>}
+          <div className="detail-purchase-row"><div className="detail-quantity-control"><span>Qty</span><button type="button" aria-label="Decrease quantity" disabled={selectedQuantity <= 1} onClick={() => setDetailQuantity((value) => Math.max(1, value - 1))}>−</button><output aria-live="polite">{selectedQuantity || "—"}</output><button type="button" aria-label="Increase quantity" disabled={selectedQuantity >= maxAddableQuantity} onClick={() => setDetailQuantity((value) => Math.min(maxAddableQuantity, value + 1))}>+</button></div><span className="detail-max-quantity">{maxAddableQuantity ? `Maximum to add: ${maxAddableQuantity}` : "No additional copies available"}</span></div>
+          <div className="product-detail-actions"><button className="button button-outline" type="button" onClick={() => toggleWishlist(book)} aria-pressed={isWishlisted(book.id)}>{isWishlisted(book.id) ? "♥ Saved" : "♡ Add to wishlist"}</button><button className="button button-outline" type="button" disabled={!maxAddableQuantity} onClick={() => addToCart(book, selectedQuantity)}>Add to bag</button><button className="button button-dark" type="button" disabled={!maxAddableQuantity} onClick={() => buyNow(book, selectedQuantity)}>Buy now ↗</button></div>
+          <p className="product-listing-note">{book.listingNote || "Catalog details are shown as supplied by the bookstore."}</p>
+        </div>
+      </article>
+
+      <section className="detail-information-section"><div className="section-heading"><div><span className="eyebrow">READ BEFORE YOU PICK</span><h2>Book details</h2></div></div><p>{book.synopsis || book.description || "No extended description has been supplied for this title yet."}</p><dl className="detail-extra-facts">{Object.entries(specs).filter(([key, value]) => !["editionStatus", "publisherCover", "deliveryEstimate", "keyTopics", "topics", "subjects", "subject", "exam"].includes(key) && value !== null && value !== "").map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</dt><dd>{typeof value === "object" ? value.join?.(", ") || JSON.stringify(value) : String(value)}</dd></div>)}</dl>{book.intendedAudience && <p className="detail-audience"><strong>Intended for:</strong> {book.intendedAudience}</p>}</section>
+
+      <section className="customer-reviews-section" id="customer-reviews">
+        <div className="section-heading"><div><span className="eyebrow">READER NOTES</span><h2>Customer reviews</h2></div></div>
+        <div className="review-summary-layout"><div className="review-average-card"><strong>{reviewCount ? Number(reviewData?.averageRating || 0).toFixed(1) : "—"}</strong>{reviewStars(reviewData?.averageRating)}<span>{reviewCount} published review{reviewCount === 1 ? "" : "s"}</span></div><div className="review-distribution">{[5, 4, 3, 2, 1].map((stars) => { const count = Number(reviewData?.ratingDistribution?.[stars] || 0); const percent = reviewCount ? count / reviewCount * 100 : 0; return <button className={reviewFilter === String(stars) ? "review-rating-filter active" : "review-rating-filter"} type="button" key={stars} onClick={() => { setReviewFilter((current) => current === String(stars) ? "" : String(stars)); setReviewPage(0); }}>{stars} stars <span className="rating-meter"><i style={{ width: `${percent}%` }} /></span><span>{count}</span></button>; })}</div></div>
+        <div className="review-toolbar"><label>Filter by rating<select value={reviewFilter} onChange={(event) => { setReviewFilter(event.target.value); setReviewPage(0); }}><option value="">All ratings</option>{[5, 4, 3, 2, 1].map((stars) => <option value={stars} key={stars}>{stars} stars</option>)}</select></label><label>Sort reviews<select value={reviewSort} onChange={(event) => { setReviewSort(event.target.value); setReviewPage(0); }}><option value="newest">Newest</option><option value="highest">Highest rating</option><option value="lowest">Lowest rating</option></select></label></div>
+        {reviewLoading && !reviewData ? <div className="review-empty-state">Loading customer reviews…</div> : reviewError ? <div className="review-empty-state review-error-state"><p>{reviewError}</p><button className="text-link" type="button" onClick={() => setReviewRefresh((value) => value + 1)}>Retry loading reviews ↻</button></div> : reviewData?.reviews?.length ? <div className="review-list">{reviewData.reviews.map((review) => <article className="customer-review-card" key={review.id}><div className="review-card-top"><strong>{review.reviewerName || "Verified reader"}</strong><span>{reviewStars(review.rating)}</span><time dateTime={review.createdAt}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : ""}</time></div><span className="verified-review-badge">✓ Verified purchase</span><h3>{review.title}</h3><p>{review.comment}</p>{review.updatedAt && review.createdAt !== review.updatedAt && <small>Edited {new Date(review.updatedAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}</small>}</article>)}</div> : <div className="review-empty-state"><strong>{reviewFilter ? `No ${reviewFilter}-star reviews yet.` : "No published reviews yet."}</strong><span>Verified readers can share their experience after delivery.</span></div>}
+        {reviewData?.hasMore && !reviewLoading && <button className="button button-outline review-load-more" type="button" onClick={() => setReviewPage((page) => page + 1)}>Load more reviews</button>}
+        {reviewError && reviewData && <button className="text-link" type="button" onClick={() => setReviewRefresh((value) => value + 1)}>Retry loading reviews ↻</button>}
+        <div className="review-write-panel"><div><span className="eyebrow">YOUR EXPERIENCE</span><h3>{reviewData?.myReview ? "Edit your review" : "Write a review"}</h3><p>Reviews are available only to customers with a delivered order for this book.</p></div>
+          {reviewData?.myReview || reviewEligible ? <form className="review-form" onSubmit={submitReview}><label>Rating<select value={reviewDraft.rating} onChange={(event) => setReviewDraft((draft) => ({ ...draft, rating: Number(event.target.value) }))}>{[5, 4, 3, 2, 1].map((stars) => <option value={stars} key={stars}>{stars} star{stars === 1 ? "" : "s"}</option>)}</select></label><label>Review title<input value={reviewDraft.title} onChange={(event) => setReviewDraft((draft) => ({ ...draft, title: event.target.value }))} maxLength={120} minLength={3} required placeholder="What stood out?" /></label><label>Your review<textarea value={reviewDraft.comment} onChange={(event) => setReviewDraft((draft) => ({ ...draft, comment: event.target.value }))} maxLength={4000} minLength={20} required rows={5} placeholder="Share details that may help another reader." /></label>{reviewError && <p className="review-form-error" role="alert">{reviewError}</p>}<div className="review-form-actions"><button className="button button-dark" type="submit" disabled={reviewSubmitting}>{reviewSubmitting ? "Saving review…" : reviewData?.myReview ? "Update review" : "Publish review"}</button>{reviewData?.myReview && <button className="button button-outline" type="button" onClick={deleteReview} disabled={reviewSubmitting}>Delete my review</button>}</div></form> : reviewEligibilityLoading ? <p className="review-eligibility-message">Checking delivered orders…</p> : !token ? <button className="button button-outline" type="button" onClick={requestReviewSignIn}>Sign in to review</button> : <p className="review-eligibility-message">{STATIC_PAGES_DEMO ? "The browser-only demo cannot verify delivered orders. Use the local Spring Boot app to submit a verified review." : "A delivered order for this book is required before you can submit a review."}</p>}
+        </div>
+      </section>
+
+      {(relatedBooks.length > 0 || relatedError) && <section className="related-books-section"><div className="section-heading"><div><span className="eyebrow">KEEP EXPLORING</span><h2>Similar books</h2></div></div>{relatedError ? <p className="catalog-message">{relatedError}</p> : <div className="shelf-grid">{relatedBooks.slice(0, 4).map((related) => <BookCard key={related.id} book={related} />)}</div>}</section>}
+      {imageZoomOpen && <div className="overlay image-preview-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setImageZoomOpen(false); }}><div className="image-preview-panel" role="dialog" aria-modal="true" aria-label={`Cover preview: ${book.title}`}><button className="close-button" type="button" onClick={() => setImageZoomOpen(false)} aria-label="Close cover preview">×</button><Cover book={book} /></div></div>}
+    </section>;
+  }
+
+  function WishlistPage() {
+    if (!user) return <section className="route-content wishlist-page"><div className="route-page-heading"><span className="eyebrow">SAVED FOR LATER</span><h1>Your wishlist</h1><p>Sign in to save books to your account and see them again later.</p></div><button className="button button-dark" onClick={() => openAuth("login", "/wishlist")}>Sign in to view your wishlist</button></section>;
+    if (wishlistLoading) return <section className="route-content wishlist-page"><div className="route-page-heading"><span className="eyebrow">SAVED FOR LATER</span><h1>Your wishlist</h1></div><div className="review-empty-state">Loading your saved books…</div></section>;
+    return <section className="route-content wishlist-page"><div className="route-page-heading"><span className="eyebrow">SAVED FOR LATER</span><h1>Your wishlist <span>({wishlistIds.length})</span></h1><p>Books you saved to your account.</p></div>{wishlistBooks.length ? <div className="wishlist-page-grid">{wishlistBooks.map((book) => <article className="wishlist-page-item" key={book.id}><Link to={`/books/${encodeURIComponent(book.id)}`} aria-label={`View ${book.title}`}><Cover book={book} /></Link><div><span className="eyebrow">{book.category || "BOOK"}</span><h2><Link to={`/books/${encodeURIComponent(book.id)}`}>{book.title}</Link></h2><p>by {book.author}</p><strong>{money.format(Number(book.price || 0))}</strong><div className="wishlist-page-actions"><button className="button button-dark" type="button" disabled={!book.stock} onClick={() => moveWishlistBookToCart(book)}>Move to bag</button><button className="text-link" type="button" onClick={() => toggleWishlist(book)}>Remove</button></div></div></article>)}</div> : <div className="review-empty-state"><strong>Your wishlist is empty.</strong><span>Tap the heart on a book to save it here.</span><button className="button button-outline" type="button" onClick={() => goToCatalog("all")}>Browse books</button></div>}</section>;
   }
 
   return (
@@ -985,7 +1267,7 @@ function App() {
         </label>
         <nav className="main-nav" aria-label="Main navigation"><Link to="/books" onClick={() => goToCatalog("all")}>Books</Link><Link to="/categories" onClick={() => navigate("/categories")}>Categories</Link></nav>
         <div className="header-actions">
-          <button className="wishlist-header" type="button" onClick={() => setWishlistOpen(true)} aria-label={`Open wishlist, ${wishlistIds.length} saved books`}>♡ <span>Wishlist</span><b>{wishlistIds.length}</b></button>
+          <button className="wishlist-header" type="button" onClick={() => navigate("/wishlist")} aria-label={`Open wishlist, ${wishlistIds.length} saved books`}>♡ <span>Wishlist</span><b>{wishlistIds.length}</b></button>
           <button className="sell-book-action" type="button" onClick={openBuyback}>Sell <span aria-hidden="true">↗</span></button>
           {user ? <><button className="account-action" type="button" onClick={() => navigate("/orders")} title={`Signed in as ${user.email || "reader"}`}>Account</button>{isAdmin && <button className="admin-header-action" type="button" onClick={() => navigate("/admin")}>Admin</button>}<button className="sign-out-action" type="button" onClick={signOut}>Sign out</button></> : <button className="account-action" type="button" onClick={() => openAuth("login")}>Sign in</button>}
           <Link className="bag-button" to="/cart" aria-label={`Open bag, ${cartCount} items`}><span className="bag-icon" aria-hidden="true">♧</span><span>Cart</span><span className="bag-count">{cartCount}</span></Link>
@@ -1005,6 +1287,7 @@ function App() {
           <Route path="/login" element={<section className="auth-route-page"><span className="eyebrow">YOUR MSRBOOKNEST ACCOUNT</span><h1>Welcome back to your bookshelf.</h1><p>Sign in to see your orders, keep your bag in sync and manage your used-book submissions.</p></section>} />
           <Route path="/register" element={<section className="auth-route-page"><span className="eyebrow">JOIN THE NEST</span><h1>Make the shelves yours.</h1><p>Create your account to save books and follow your orders.</p></section>} />
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/buyback" element={<BuybackDashboard user={user} onSignIn={() => openAuth("login")} onToast={showToast} />} />
           <Route path="/admin" element={isAdmin ? <AdminDashboard /> : <Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -1055,9 +1338,7 @@ function App() {
         </aside>
       </div>}
 
-      {activeProduct && <div className="overlay modal-overlay product-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setActiveProduct(null); }}><section className="product-detail-dialog" aria-labelledby="product-detail-title"><button className="close-button product-detail-close" onClick={() => setActiveProduct(null)} aria-label="Close book details">×</button><div className="product-detail-art"><Cover book={activeProduct} /></div><div className="product-detail-copy"><span className="eyebrow">{activeProduct.category || "BOOKS"}{activeProduct.subcategory ? ` · ${activeProduct.subcategory}` : ""}</span><h2 id="product-detail-title">{activeProduct.title}</h2><p className="product-detail-author">by {activeProduct.author}</p><div className="product-detail-price"><strong>{money.format(Number(activeProduct.price || 0))}</strong><span>{activeProduct.stock > 0 ? `${activeProduct.stock} demo units available` : "Currently out of stock"}</span></div><p className="product-detail-description">{activeProduct.description || "A book for your next chapter."}</p><dl className="product-detail-facts"><div><dt>Condition</dt><dd>{activeProduct.conditionLabel || "New"}</dd></div><div><dt>Publisher</dt><dd>{activeProduct.publisher || "Not verified"}</dd></div><div><dt>Edition</dt><dd>{activeProduct.edition || "Not verified"}</dd></div><div><dt>Language</dt><dd>{activeProduct.language || "Not specified"}</dd></div><div><dt>Format</dt><dd>{activeProduct.format || "Book"}</dd></div><div><dt>ISBN</dt><dd>{activeProduct.isbn || "Not provided · unverified"}</dd></div>{Object.entries(readBookSpecifications(activeProduct)).filter(([key]) => !["editionStatus", "publisherCover"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</dt><dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd></div>)}</dl><p className="product-listing-note">{activeProduct.listingNote || "Demo sample · verify publisher details and edition before purchase."}</p><div className="product-detail-actions"><button className="button button-outline" type="button" onClick={() => toggleWishlist(activeProduct)}>{wishlistIds.includes(activeProduct.id) ? "♥ Saved" : "♡ Wishlist"}</button><button className="button button-outline" type="button" onClick={() => { addToCart(activeProduct); setActiveProduct(null); }}>Add to bag</button><button className="button button-dark" type="button" disabled={!activeProduct.stock} onClick={() => buyNow(activeProduct)}>Buy now ↗</button></div></div></section></div>}
 
-      {wishlistOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setWishlistOpen(false); }}><aside className="drawer wishlist-drawer" aria-label="Wishlist"><div className="drawer-header"><div><span className="eyebrow">SAVED FOR LATER</span><h2>Your wishlist <span>({wishlistBooks.length})</span></h2></div><button className="close-button" onClick={() => setWishlistOpen(false)} aria-label="Close wishlist">×</button></div>{wishlistBooks.length === 0 ? <div className="drawer-empty"><span className="empty-bag">♡</span><h3>Your next favorite?</h3><p>Tap the heart on any book to keep it close.</p><button className="button button-dark" onClick={() => { setWishlistOpen(false); goToCatalog("all"); }}>Browse the shelves</button></div> : <div className="wishlist-items">{wishlistBooks.map((book) => <article className="wishlist-item" key={book.id}><button className="wishlist-cover-button" onClick={() => { setActiveProduct(book); setWishlistOpen(false); }} aria-label={`View ${book.title} details`}><Cover book={{ ...book, id: book.id }} compact /></button><div><strong>{book.title}</strong><small>{book.author}</small><b>{money.format(Number(book.price || 0))}</b><div><button onClick={() => { addToCart(book); setWishlistOpen(false); }}>Add to bag</button><button onClick={() => toggleWishlist(book)}>Remove</button></div></div></article>)}</div>}</aside></div>}
 
       {authOpen && <div className={authRoute ? "auth-route-overlay" : "overlay modal-overlay"} onMouseDown={(event) => { if (event.target === event.currentTarget) closeAuth(); }}>
         <section className="dialog" aria-labelledby="auth-title">

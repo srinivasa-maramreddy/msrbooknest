@@ -80,6 +80,13 @@ public class OrderService {
         return orderRepository.findByCustomerEmailOrderByCreatedAtDesc(email);
     }
 
+    public boolean isEligibleToReview(String email, Long bookId) {
+        return orderRepository.findByCustomerEmailOrderByCreatedAtDesc(email).stream()
+                .filter(order -> order.getStatus() == OrderStatus.DELIVERED)
+                .flatMap(order -> order.getItems().stream())
+                .anyMatch(item -> bookId.equals(item.getBookId()));
+    }
+
     public List<Order> allOrders() {
         return orderRepository.findAllByOrderByCreatedAtDesc();
     }

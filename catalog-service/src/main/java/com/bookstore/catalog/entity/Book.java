@@ -1,6 +1,7 @@
 package com.bookstore.catalog.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import jakarta.persistence.*;
 
@@ -20,8 +21,19 @@ public class Book {
     @Column(length = 2000)
     private String description;
 
+    @Column(length = 4000)
+    private String synopsis;
+
+    @Column(length = 500)
+    private String intendedAudience;
+
+    private LocalDate publicationDate;
+
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
+
+    @Column(precision = 12, scale = 2)
+    private BigDecimal originalPrice;
 
     @Column(nullable = false)
     private Integer stock;
@@ -69,7 +81,11 @@ public class Book {
     public String getTitle() { return title; }
     public String getAuthor() { return author; }
     public String getDescription() { return description; }
+    public String getSynopsis() { return synopsis; }
+    public String getIntendedAudience() { return intendedAudience; }
+    public LocalDate getPublicationDate() { return publicationDate; }
     public BigDecimal getPrice() { return price; }
+    public BigDecimal getOriginalPrice() { return originalPrice; }
     public Integer getStock() { return stock; }
     public String getImageUrl() { return imageUrl; }
     public String getCategory() { return category; }
@@ -90,7 +106,11 @@ public class Book {
     public void setTitle(String title) { this.title = title; }
     public void setAuthor(String author) { this.author = author; }
     public void setDescription(String description) { this.description = description; }
+    public void setSynopsis(String synopsis) { this.synopsis = synopsis; }
+    public void setIntendedAudience(String intendedAudience) { this.intendedAudience = intendedAudience; }
+    public void setPublicationDate(LocalDate publicationDate) { this.publicationDate = publicationDate; }
     public void setPrice(BigDecimal price) { this.price = price; }
+    public void setOriginalPrice(BigDecimal originalPrice) { this.originalPrice = originalPrice; }
     public void setStock(Integer stock) { this.stock = stock; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public void setCategory(String category) { this.category = category; }

@@ -1,6 +1,7 @@
 package com.bookstore.catalog.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.DecimalMin;
@@ -22,10 +23,22 @@ public class ProductRequest {
     @Size(max = 2000, message = "Description must be 2000 characters or less")
     private String description;
 
+    @Size(max = 4000, message = "Synopsis must be 4000 characters or less")
+    private String synopsis;
+
+    @Size(max = 500, message = "Intended audience must be 500 characters or less")
+    private String intendedAudience;
+
+    private LocalDate publicationDate;
+
     @NotNull(message = "Price is required")
     @DecimalMin(value = "0.01", message = "Price must be greater than zero")
     @Digits(integer = 10, fraction = 2, message = "Price must have at most two decimal places")
     private BigDecimal price;
+
+    @DecimalMin(value = "0.01", message = "Original price must be greater than zero")
+    @Digits(integer = 10, fraction = 2, message = "Original price must have at most two decimal places")
+    private BigDecimal originalPrice;
 
     @NotNull(message = "Stock is required")
     @PositiveOrZero(message = "Stock cannot be negative")
@@ -82,9 +95,15 @@ public class ProductRequest {
         return description;
     }
 
+    public String getSynopsis() { return synopsis; }
+    public String getIntendedAudience() { return intendedAudience; }
+    public LocalDate getPublicationDate() { return publicationDate; }
+
     public BigDecimal getPrice() {
         return price;
     }
+
+    public BigDecimal getOriginalPrice() { return originalPrice; }
 
     public Integer getStock() {
         return stock;
@@ -127,9 +146,15 @@ public class ProductRequest {
         this.description = description;
     }
 
+    public void setSynopsis(String synopsis) { this.synopsis = synopsis; }
+    public void setIntendedAudience(String intendedAudience) { this.intendedAudience = intendedAudience; }
+    public void setPublicationDate(LocalDate publicationDate) { this.publicationDate = publicationDate; }
+
     public void setPrice(BigDecimal price) {
         this.price = price;
     }
+
+    public void setOriginalPrice(BigDecimal originalPrice) { this.originalPrice = originalPrice; }
 
     public void setStock(Integer stock) {
         this.stock = stock;

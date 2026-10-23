@@ -44,6 +44,15 @@ public class OrderController {
         return ResponseEntity.ok(orderService.myOrders(email));
     }
 
+    @GetMapping("/me/review-eligibility/{bookId}")
+    public ResponseEntity<?> reviewEligibility(@PathVariable Long bookId, HttpServletRequest request) {
+        String email = getEmail(request);
+        if (email == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
+        }
+        return ResponseEntity.ok(Map.of("eligible", orderService.isEligibleToReview(email, bookId)));
+    }
+
     @GetMapping
     public ResponseEntity<?> allOrders(HttpServletRequest request) {
         if (!isAdmin(request)) {

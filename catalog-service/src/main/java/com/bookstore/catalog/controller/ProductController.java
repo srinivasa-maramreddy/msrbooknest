@@ -60,6 +60,16 @@ public class ProductController {
         }
     }
 
+    @GetMapping("/products/{id}/related")
+    public ResponseEntity<?> getRelatedProducts(@PathVariable("id") Long id,
+                                                @RequestParam(value = "limit", required = false, defaultValue = "8") int limit) {
+        try {
+            return ResponseEntity.ok(bookService.getRelatedProducts(id, limit));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", ex.getMessage()));
+        }
+    }
+
     @GetMapping("/admin/products")
     public ResponseEntity<?> adminGetProducts(
             @RequestParam(value = "q", required = false) String query,

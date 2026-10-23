@@ -76,6 +76,14 @@ public class BookService {
         return new ProductResponse(getById(id));
     }
 
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getRelatedProducts(Long id, int limit) {
+        Book book = getById(id);
+        int size = Math.max(1, Math.min(limit, 12));
+        return bookRepository.findRelated(book.getId(), book.getCategory(), book.getSubcategory(), PageRequest.of(0, size))
+                .stream().map(ProductResponse::new).toList();
+    }
+
     public List<Book> getNewArrivals() {
         return bookRepository.findByIsNewArrivalTrue();
     }
@@ -101,7 +109,11 @@ public class BookService {
         book.setTitle(payload.getTitle());
         book.setAuthor(payload.getAuthor());
         book.setDescription(payload.getDescription());
+        book.setSynopsis(payload.getSynopsis());
+        book.setIntendedAudience(payload.getIntendedAudience());
+        book.setPublicationDate(payload.getPublicationDate());
         book.setPrice(payload.getPrice());
+        book.setOriginalPrice(payload.getOriginalPrice());
         book.setStock(payload.getStock());
         book.setImageUrl(payload.getImageUrl());
         book.setCategory(payload.getCategory());
@@ -246,10 +258,18 @@ public class BookService {
     }
 
     private void applyProductRequest(Book book, ProductRequest request) {
+        if (request.getOriginalPrice() != null && request.getPrice() != null
+                && request.getOriginalPrice().compareTo(request.getPrice()) < 0) {
+            throw new IllegalArgumentException("Original price must be greater than or equal to the current price");
+        }
         book.setTitle(request.getTitle().trim());
         book.setAuthor(request.getAuthor().trim());
         book.setDescription(request.getDescription() == null ? "" : request.getDescription().trim());
+        book.setSynopsis(blankToNull(request.getSynopsis()));
+        book.setIntendedAudience(blankToNull(request.getIntendedAudience()));
+        book.setPublicationDate(request.getPublicationDate());
         book.setPrice(request.getPrice());
+        book.setOriginalPrice(request.getOriginalPrice());
         book.setStock(request.getStock());
         book.setImageUrl(request.getImageUrl() == null ? null : request.getImageUrl().trim());
         book.setCategory(blankToNull(request.getCategory()));

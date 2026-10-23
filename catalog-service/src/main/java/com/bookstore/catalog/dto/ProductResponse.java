@@ -1,6 +1,7 @@
 package com.bookstore.catalog.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import com.bookstore.catalog.entity.Book;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -10,7 +11,11 @@ public class ProductResponse {
     private String title;
     private String author;
     private String description;
+    private String synopsis;
+    private String intendedAudience;
+    private LocalDate publicationDate;
     private BigDecimal price;
+    private BigDecimal originalPrice;
     private Integer stock;
     private String imageUrl;
     private String category;
@@ -38,7 +43,11 @@ public class ProductResponse {
         this.title = book.getTitle();
         this.author = book.getAuthor();
         this.description = book.getDescription();
+        this.synopsis = book.getSynopsis();
+        this.intendedAudience = book.getIntendedAudience();
+        this.publicationDate = book.getPublicationDate();
         this.price = book.getPrice();
+        this.originalPrice = book.getOriginalPrice();
         this.stock = book.getStock();
         this.imageUrl = book.getImageUrl();
         this.category = book.getCategory();
@@ -71,9 +80,15 @@ public class ProductResponse {
         return description;
     }
 
+    public String getSynopsis() { return synopsis; }
+    public String getIntendedAudience() { return intendedAudience; }
+    public LocalDate getPublicationDate() { return publicationDate; }
+
     public BigDecimal getPrice() {
         return price;
     }
+
+    public BigDecimal getOriginalPrice() { return originalPrice; }
 
     public Integer getStock() {
         return stock;
