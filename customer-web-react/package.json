@@ -14,7 +14,8 @@
   "dependencies": {
     "oidc-client-ts": "^3.5.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^6.30.6"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.0",

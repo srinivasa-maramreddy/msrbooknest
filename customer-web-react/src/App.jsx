@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api.js";
 import { clearSession, getAccessToken, getIdentity, saveSession, subscribeIdentity } from "./auth.js";
 import BuybackDashboard from "./BuybackDashboard.jsx";
@@ -36,6 +37,11 @@ const PRIMARY_BOOK_SHELVES = [
 ];
 const PRIMARY_BOOK_CATEGORIES = new Set(PRIMARY_BOOK_SHELVES.flatMap((shelf) => shelf.categories));
 const MORE_BOOK_CATEGORIES = CATALOG_CATEGORIES.filter((category) => !PRIMARY_BOOK_CATEGORIES.has(category.name));
+const ROUTE_BOOK_GROUPS = [
+  { id: "academic", label: "Academic books", categories: ["School Books", "Intermediate", "Entrance Exams", "Engineering", "Medical & Health"] },
+  { id: "fiction", label: "Fiction & lifestyle", categories: ["Fiction", "Manga & Anime Books", "Children's Books", "Self-improvement", "Finance & Business", "Biography & Inspiration", "History & Ideas"] },
+];
+const BOOK_GROUPS = [...PRIMARY_BOOK_SHELVES, ...ROUTE_BOOK_GROUPS];
 
 const money = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -135,6 +141,11 @@ function Cover({ book, compact = false }) {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const buybackView = location.pathname === "/buyback";
+  const adminOpen = location.pathname === "/admin";
+  const authRoute = location.pathname === "/login" || location.pathname === "/register";
   const [books, setBooks] = useState([]);
   const [booksLoading, setBooksLoading] = useState(true);
   const [booksError, setBooksError] = useState("");
@@ -154,13 +165,11 @@ function App() {
   const [navigationExpandedGroup, setNavigationExpandedGroup] = useState("");
   const [navigationMoreOpen, setNavigationMoreOpen] = useState(false);
   const [activeProduct, setActiveProduct] = useState(null);
-  const [adminOpen, setAdminOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [adminQuery, setAdminQuery] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
   const [sortBy, setSortBy] = useState("featured");
   const [cart, setCart] = useState(readStoredCart);
-  const [cartOpen, setCartOpen] = useState(false);
   const [token, setToken] = useState("");
   const [user, setUser] = useState(getIdentity);
   const [orders, setOrders] = useState([]);
@@ -176,11 +185,9 @@ function App() {
   const [recoveryIdentifier, setRecoveryIdentifier] = useState("");
   const [recoveryMaskedEmail, setRecoveryMaskedEmail] = useState("");
   const [recoveryDemoOtp, setRecoveryDemoOtp] = useState("");
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState("UPI");
   const [toast, setToast] = useState("");
-  const [buybackView, setBuybackView] = useState(() => window.location.hash === "#buyback");
   const [activeAd, setActiveAd] = useState(0);
   const [adsPaused, setAdsPaused] = useState(false);
   const [adsHovered, setAdsHovered] = useState(false);
@@ -194,6 +201,37 @@ function App() {
     motionPreference.addEventListener?.("change", updateMotionPreference);
     return () => motionPreference.removeEventListener?.("change", updateMotionPreference);
   }, []);
+
+  useEffect(() => {
+    setNavigationOpen(false);
+    if (location.pathname === "/categories/academic") {
+      setActiveCategoryGroup("academic");
+      setActiveCategory("");
+      setActiveShelf("all");
+      setActiveSubcategory("");
+      setFacetKey("");
+      setFacetValue("");
+      setConditionFilter("all");
+      setQuery("");
+    } else if (location.pathname === "/categories/fiction") {
+      setActiveCategoryGroup("fiction");
+      setActiveCategory("");
+      setActiveShelf("all");
+      setActiveSubcategory("");
+      setFacetKey("");
+      setFacetValue("");
+      setConditionFilter("all");
+      setQuery("");
+    } else if (location.pathname === "/books") {
+      setActiveCategoryGroup("");
+    }
+    if (authRoute) {
+      setAuthMode(location.pathname === "/register" ? "register" : "login");
+      setAuthOpen(true);
+    } else {
+      setAuthOpen(false);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (buybackView || adsPaused || adsHovered || adsFocused || prefersReducedMotion) return undefined;
@@ -311,7 +349,7 @@ function App() {
     return () => window.clearInterval(timer);
   }, [orders, token, loadOrders]);
 
-  const selectedBookGroup = PRIMARY_BOOK_SHELVES.find((shelf) => shelf.id === activeCategoryGroup);
+  const selectedBookGroup = BOOK_GROUPS.find((shelf) => shelf.id === activeCategoryGroup);
   const activeCategoryLabel = selectedBookGroup?.label || activeCategory;
   const selectedGroupOptions = selectedBookGroup?.filterKey ? [...new Set(books
     .filter((book) => selectedBookGroup.categories.includes(book.category))
@@ -422,7 +460,7 @@ function App() {
   async function buyNow(book) {
     await addToCart(book);
     setActiveProduct(null);
-    setCheckoutOpen(true);
+    navigate("/checkout");
   }
 
   async function addToCart(book) {
@@ -485,9 +523,9 @@ function App() {
   async function submitCheckout(event) {
     event.preventDefault();
     if (!token) {
-      setCheckoutOpen(false);
       setAuthMode("login");
       setAuthOpen(true);
+      navigate("/login");
       showToast("Sign in before placing your order.");
       return;
     }
@@ -510,11 +548,9 @@ function App() {
       });
       await api.clearCart(token);
       setCart([]);
-      setCheckoutOpen(false);
-      setCartOpen(false);
       await loadOrders(token);
       showToast(order.status === "PAID" ? "Order placed. Happy reading!" : `Order status: ${order.status}`);
-      document.getElementById("orders")?.scrollIntoView({ behavior: "smooth" });
+      navigate("/orders");
     } catch (error) {
       showToast(error.message);
     } finally {
@@ -530,6 +566,12 @@ function App() {
     setEmailDemoOtp("");
     setAuthMode(mode);
     setAuthOpen(true);
+    navigate(mode === "register" ? "/register" : "/login");
+  }
+
+  function closeAuth() {
+    setAuthOpen(false);
+    if (authRoute) navigate("/");
   }
 
   function resetRegistration() {
@@ -591,6 +633,8 @@ function App() {
       setRecoveryDemoOtp("");
     }
     setAuthMode(mode);
+    if (mode === "register") navigate("/register");
+    else if (mode === "login") navigate("/login");
   }
 
   async function resendRecoveryCode() {
@@ -679,6 +723,7 @@ function App() {
         saveSession(response, registration.name);
         setAuthOpen(false);
         resetRegistration();
+        navigate("/orders");
         showToast("Your verified account is ready. Welcome to the nest.");
         return;
       }
@@ -690,6 +735,7 @@ function App() {
       saveSession(response);
       setAuthOpen(false);
       resetRegistration();
+      navigate("/orders");
       showToast("Welcome back to the nest.");
     } catch (error) {
       showToast(error.message || (registering ? "Could not verify your account." : "Could not sign in to msrbooknest."));
@@ -699,9 +745,6 @@ function App() {
   }
 
   function goToCatalog(shelf = "all") {
-    setBuybackView(false);
-    setAdminOpen(false);
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#top`);
     setActiveShelf(shelf);
     setActiveCategory("");
     setActiveCategoryGroup("");
@@ -709,13 +752,10 @@ function App() {
     setFacetKey("");
     setFacetValue("");
     setConditionFilter("all");
-    window.setTimeout(() => document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" }), 0);
+    navigate("/books");
   }
 
   function selectCategory(category, subcategory = "") {
-    setBuybackView(false);
-    setAdminOpen(false);
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#top`);
     setActiveShelf("all");
     setActiveCategory(category);
     setActiveCategoryGroup("");
@@ -724,13 +764,10 @@ function App() {
     setFacetValue("");
     setConditionFilter("all");
     setQuery("");
-    window.setTimeout(() => document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" }), 0);
+    navigate("/books");
   }
 
   function selectCategoryGroup(groupId) {
-    setBuybackView(false);
-    setAdminOpen(false);
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#top`);
     setActiveShelf("all");
     setActiveCategory("");
     setActiveCategoryGroup(groupId);
@@ -739,7 +776,8 @@ function App() {
     setFacetValue("");
     setConditionFilter("all");
     setQuery("");
-    window.setTimeout(() => document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" }), 0);
+    const group = BOOK_GROUPS.find((shelf) => shelf.id === groupId);
+    navigate(group?.route || (groupId === "academic" || groupId === "fiction" ? `/categories/${groupId}` : "/books"));
   }
 
   function selectGroupFacet(groupId, key, value) {
@@ -749,9 +787,7 @@ function App() {
   }
 
   function openBuyback() {
-    setAdminOpen(false);
-    setBuybackView(true);
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#buyback`);
+    navigate("/buyback");
   }
 
   async function saveInventoryProduct(event) {
@@ -879,10 +915,61 @@ function App() {
               <span aria-hidden="true">+</span> Add to bag
             </button>
           </div>
-          <button className="book-details-link" type="button" onClick={() => setActiveProduct(book)}>View details <span aria-hidden="true">↗</span></button>
+          <button className="book-details-link" type="button" onClick={() => navigate(`/books/${encodeURIComponent(book.id)}`)}>View details <span aria-hidden="true">↗</span></button>
         </div>
       </article>
     );
+  }
+
+  function HomePage() {
+    const featuredBooks = (bestSellers.length ? bestSellers : newArrivals).slice(0, 4);
+    return <>
+      <section className="marketplace-hero home-hero" aria-label="Buy or sell books">
+        <div className="marketplace-hero-heading"><span className="eyebrow">A BOOK MARKETPLACE FOR EVERY READER</span><h1>Stories keep finding<br /><em>new readers.</em></h1><p>School textbooks, exam prep, novels and thoughtful reads—all on one shelf.</p><div className="home-hero-actions"><button className="button button-dark" onClick={() => goToCatalog("all")}>Explore all books <span aria-hidden="true">↗</span></button><button className="button button-outline" onClick={openBuyback}>Sell a book</button></div></div>
+        <div className="marketplace-carousel" role="region" aria-roledescription="carousel" aria-label="Bookstore promotions" onMouseEnter={() => setAdsHovered(true)} onMouseLeave={() => setAdsHovered(false)} onFocusCapture={() => setAdsFocused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setAdsFocused(false); }}>
+          <div className="marketplace-carousel-window"><div className="marketplace-carousel-track" style={{ transform: `translateX(-${activeAd * 100}%)` }}>
+            <article className="marketplace-ad marketplace-ad-buy" aria-label="1 of 3: Buy a book" aria-hidden={activeAd !== 0} inert={activeAd !== 0}><div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-one" src={PUBLISHER_COVER_IMAGES[0]} alt="" /><img className="ad-cover-photo ad-cover-photo-two" src={PUBLISHER_COVER_IMAGES[1]} alt="" /></div><div className="marketplace-ad-copy"><span className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</span><h2>Books for every mind.</h2><p>Find textbooks, reference guides and stories worth keeping.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Buy a book ↗</button></div></article>
+            <article className="marketplace-ad marketplace-ad-sell" aria-label="2 of 3: Sell a book" aria-hidden={activeAd !== 1} inert={activeAd !== 1}><div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-three" src={PUBLISHER_COVER_IMAGES[2]} alt="" /><img className="ad-cover-photo ad-cover-photo-four" src={PUBLISHER_COVER_IMAGES[1]} alt="" /></div><div className="marketplace-ad-copy"><span className="eyebrow">READY TO PASS ONE ALONG?</span><h2>Give a book a new reader.</h2><p>Share a few photos, review a quote, and follow each step.</p><button className="button button-outline" onClick={openBuyback}>Sell a book ↗</button></div></article>
+            <article className="marketplace-ad marketplace-ad-value" aria-label="3 of 3: Affordable books" aria-hidden={activeAd !== 2} inert={activeAd !== 2}><div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-five" src={PUBLISHER_COVER_IMAGES[0]} alt="" /></div><div className="marketplace-ad-copy"><span className="eyebrow">SMALL BUDGET, BIG IDEAS</span><h2>Good reads under ₹400.</h2><p>Make room for another story at a price that feels right.</p><button className="button button-outline" onClick={() => goToCatalog("under400")}>Shop under ₹400 ↗</button></div></article>
+          </div></div>
+          <div className="marketplace-carousel-controls"><button className="carousel-arrow" aria-label="Previous advertisement" onClick={() => setActiveAd((current) => (current + 2) % 3)}>←</button><div className="marketplace-carousel-dots" role="group" aria-label="Choose an advertisement">{["Buy books", "Sell a book", "Books under ₹400"].map((label, index) => <button key={label} className={activeAd === index ? "carousel-dot active" : "carousel-dot"} aria-label={`Show ${label}`} aria-current={activeAd === index ? "true" : undefined} onClick={() => setActiveAd(index)} />)}</div><span className="carousel-count">0{activeAd + 1} <span>/</span> 03</span><button className="carousel-pause" aria-label={adsPaused ? "Resume automatic promotions" : "Pause automatic promotions"} aria-pressed={adsPaused} onClick={() => setAdsPaused((paused) => !paused)}>{adsPaused ? "Play ▶" : "Pause Ⅱ"}</button><button className="carousel-arrow" aria-label="Next advertisement" onClick={() => setActiveAd((current) => (current + 1) % 3)}>→</button></div>
+        </div>
+      </section>
+      <section className="home-category-section"><div className="section-heading"><div><span className="eyebrow">FIND YOUR KIND OF BOOK</span><h2>Choose your shelf</h2></div><Link className="text-link" to="/books">Browse all {books.length} books ↗</Link></div><div className="home-category-grid"><button className="home-category-card academic-card" onClick={() => selectCategoryGroup("academic")}><span className="eyebrow">SCHOOL · MPC · JEE · NEET</span><strong>Academic books</strong><small>Board texts, reference guides and exam practice.</small><span className="home-category-arrow">Explore shelf ↗</span></button><button className="home-category-card fiction-card" onClick={() => selectCategoryGroup("fiction")}><span className="eyebrow">NOVELS · SELF-HELP · MANGA</span><strong>Fiction &amp; more</strong><small>Stories, ideas and inspiration for every reader.</small><span className="home-category-arrow">Explore shelf ↗</span></button></div></section>
+      {featuredBooks.length > 0 && <section className="home-featured-section"><div className="section-heading"><div><span className="eyebrow">POPULAR PICKS</span><h2>A few books readers love</h2></div><button className="text-link" onClick={() => goToCatalog("bestsellers")}>See all popular books ↗</button></div><div className="shelf-grid">{featuredBooks.map((book) => <BookCard key={book.id} book={book} />)}</div></section>}
+      <section className="home-sell-banner"><div><span className="eyebrow">PASS THE STORY ALONG</span><h2>Have books ready for a new chapter?</h2><p>Submit a used book for a simulated review and quotation.</p></div><button className="button button-dark" onClick={openBuyback}>Sell your book ↗</button></section>
+    </>;
+  }
+
+  function CategoriesPage() {
+    return <section className="route-content categories-page"><div className="route-page-heading"><span className="eyebrow">BROWSE BY CATEGORY</span><h1>Find your shelf.</h1><p>Pick a collection to see books, filters and prices in one place.</p></div><div className="category-grid">{CATALOG_CATEGORIES.map((category) => <button className="category-tile" key={category.name} type="button" onClick={() => selectCategory(category.name)}><span className="category-index">{category.icon}</span><span className="category-tile-copy"><strong>{category.title}</strong><small>{category.summary}</small></span><span className="category-arrow" aria-hidden="true">↗</span></button>)}</div></section>;
+  }
+
+  function CatalogPage() {
+    return <section className="catalog-section route-content" id="catalog"><div className="catalog-topline"><div><span className="eyebrow">YOUR NEXT FAVORITE IS HERE</span><h1>{activeCategoryLabel || "Browse all books"}</h1><p>Search the shelves, adjust the filters and sort your results.</p></div><span className="catalog-count">{filteredBooks.length.toLocaleString("en-IN")} sample {filteredBooks.length === 1 ? "listing" : "listings"} · page {page} of {totalPages}</span></div><div className="catalog-tools">
+      <label className="search-box"><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, topic, class, publisher…" aria-label="Search books by title, author, category, or topic" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}</label>
+      <div className="shelf-filters" role="group" aria-label="Filter books">{[["all", "All books"], ["new", "New in"], ["bestsellers", "Bestsellers"], ["under99", "Under ₹99"], ["under199", "Under ₹199"], ["under299", "Under ₹299"], ["examPrep", "NEET / JEE"]].map(([key, label]) => <button key={key} className={activeShelf === key ? "filter-chip active" : "filter-chip"} onClick={() => setActiveShelf(key)}>{label}</button>)}</div>
+      <div className="advanced-filters">{availableFacetKeys.length > 0 && <label><span>Refine by</span><select value={facetKey} onChange={(event) => { setFacetKey(event.target.value); setFacetValue(""); }}><option value="">Any detail</option>{availableFacetKeys.map((key) => <option key={key} value={key}>{key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</option>)}</select></label>}{facetKey && <label><span>{facetKey.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</span><select value={facetValue} onChange={(event) => setFacetValue(event.target.value)}><option value="">All options</option>{availableFacetValues.map((value) => <option key={value}>{value}</option>)}</select></label>}<label><span>Condition</span><select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}><option value="all">New &amp; used</option><option>New</option><option>Used · Like New</option><option>Used · Very Good</option><option>Used · Good</option><option>Used · Acceptable</option></select></label><label className="sort-select"><span>Sort</span><select value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="title">Title: A–Z</option></select></label>{(activeCategory || activeCategoryGroup || activeSubcategory || facetValue || conditionFilter !== "all" || query || activeShelf !== "all") && <button className="clear-filters" onClick={() => { setQuery(""); setActiveShelf("all"); setActiveCategory(""); setActiveCategoryGroup(""); setActiveSubcategory(""); setFacetKey(""); setFacetValue(""); setConditionFilter("all"); }}>Clear filters</button>}</div>
+    </div>{booksLoading ? <div className="catalog-message"><span className="loader" />Finding good reads for you…</div> : booksError ? <div className="catalog-message error-message"><strong>We can’t reach the shelves right now.</strong><span>{booksError}</span><button className="button button-dark" onClick={loadBooks}>Try again</button></div> : visibleBooks.length ? <><div className="book-grid">{visibleBooks.map((book) => <BookCard key={book.id} book={book} />)}</div><nav className="catalog-pagination" aria-label="Catalog pages"><button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>← Previous</button><span>Page <strong>{page}</strong> of {totalPages}</span><button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages}>Next →</button></nav></> : <div className="catalog-message"><strong>No books found on this shelf.</strong><span>Try another search or browse all titles.</span><button className="text-link" onClick={() => goToCatalog("all")}>Show all books ↗</button></div>}</section>;
+  }
+
+  function CartPage() {
+    return <section className="route-content cart-page"><div className="route-page-heading"><span className="eyebrow">YOUR NEXT CHAPTER</span><h1>Your bag <span>({cartCount})</span></h1><p>Review your books before you continue to checkout.</p></div>{cart.length === 0 ? <div className="orders-empty cart-empty"><span className="empty-bag">♧</span><h2>Your bag is empty.</h2><p>Find a good read and add it here.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Explore all books</button></div> : <div className="cart-page-layout"><div className="cart-page-items">{cart.map((item) => <article className="cart-page-item" key={item.bookId}><Cover book={{ ...item, id: item.bookId }} compact /><div className="cart-page-item-info"><h2>{item.title}</h2><p>by {item.author}</p><strong>{money.format(Number(item.unitPrice || 0))}</strong><div className="quantity-control"><button onClick={() => changeQuantity(item, item.quantity - 1)} aria-label={`Decrease ${item.title} quantity`}>−</button><span>{item.quantity}</span><button onClick={() => changeQuantity(item, item.quantity + 1)} aria-label={`Increase ${item.title} quantity`}>+</button><button className="remove-button" onClick={() => changeQuantity(item, 0)}>Remove</button></div></div></article>)}</div><aside className="cart-page-summary"><span className="eyebrow">ORDER SUMMARY</span><div className="subtotal-row"><span>Subtotal</span><strong>{money.format(cartTotal)}</strong></div><p>Shipping and taxes are calculated at checkout.</p><button className="button button-dark button-full" onClick={() => navigate("/checkout")}>Continue to checkout ↗</button><button className="continue-link" onClick={() => goToCatalog("all")}>Keep browsing</button></aside></div>}</section>;
+  }
+
+  function CheckoutPage() {
+    return <section className="route-content checkout-page"><div className="route-page-heading"><span className="eyebrow">ALMOST YOURS</span><h1>Checkout</h1><p>Your bag has {cartCount} {cartCount === 1 ? "book" : "books"} · {money.format(cartTotal)}</p></div>{cart.length === 0 ? <div className="orders-empty"><p>Add a book to your bag before checking out.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Browse books</button></div> : !user ? <div className="checkout-signin"><p>Sign in before placing your order.</p><button className="button button-dark" onClick={() => openAuth("login")}>Sign in to continue</button></div> : <div className="checkout-page-card"><form className="dialog-form" onSubmit={submitCheckout}><label>Recipient name<input name="customerName" autoComplete="name" defaultValue={user?.name || user?.email?.split("@")[0] || ""} required /></label><label>Phone number<input name="phone" type="tel" autoComplete="tel" required placeholder="10 digit number" /></label><label>Delivery address<textarea name="address" autoComplete="street-address" rows="3" required placeholder="House, street, city, PIN code" /></label><label>Payment method<select name="paymentMethod" value={checkoutPaymentMethod} onChange={(event) => setCheckoutPaymentMethod(event.target.value)}><option>UPI</option><option>Credit Card</option><option>Debit Card</option></select></label>{checkoutPaymentMethod === "UPI" && <label>Demo UPI ID<input name="paymentAddress" defaultValue="success@upi" required /><small>Use fail@upi to see a simulated NPCI decline.</small></label>}<p className="identity-note">Payments use a simulator; no money is moved.</p><button className="button button-dark button-full" disabled={checkoutBusy}>{checkoutBusy ? "Placing your order…" : `Place order · ${money.format(cartTotal)}`}</button></form></div>}</section>;
+  }
+
+  function OrdersPage() {
+    return <section className="orders-section route-content" id="orders"><div className="section-heading"><div><span className="eyebrow">YOUR READING JOURNEY</span><h1>Orders &amp; deliveries</h1></div>{user && <button className="text-link" onClick={() => loadOrders()}>Refresh orders ↻</button>}</div>{!user ? <div className="orders-empty"><p>Sign in to find your msrbooknest orders here.</p><button className="button button-outline" onClick={() => openAuth("login")}>Sign in</button></div> : ordersLoading ? <div className="orders-empty">Loading your orders…</div> : orders.length === 0 ? <div className="orders-empty"><p>No orders yet. Your next favorite is waiting on the shelves.</p><button className="text-link" onClick={() => goToCatalog("all")}>Browse books ↗</button></div> : <div className="orders-list">{orders.map((order) => <article className="order-card" key={order.id || order.orderRequestId}><div><span className="order-label">ORDER {order.orderRequestId}</span><strong>{order.status?.replaceAll("_", " ")}</strong><span>{new Date(order.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}</span></div><div><strong>{money.format(Number(order.totalAmount || 0))}</strong><span>{order.items?.length || 0} {order.items?.length === 1 ? "title" : "titles"}</span></div></article>)}</div>}</section>;
+  }
+
+  function BookDetailsPage() {
+    const id = decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "");
+    const book = books.find((entry) => String(entry.id) === id);
+    if (!book) return <section className="route-content catalog-message"><strong>Book not found.</strong><button className="button button-dark" onClick={() => goToCatalog("all")}>Browse books</button></section>;
+    return <section className="route-content product-route-page"><button className="continue-link" onClick={() => navigate(-1)}>← Back to the shelves</button><article className="product-detail-dialog product-detail-page"><div className="product-detail-art"><Cover book={book} /></div><div className="product-detail-copy"><span className="eyebrow">{book.category || "BOOKS"}{book.subcategory ? ` · ${book.subcategory}` : ""}</span><h1>{book.title}</h1><p className="product-detail-author">by {book.author}</p><div className="product-detail-price"><strong>{money.format(Number(book.price || 0))}</strong><span>{book.stock > 0 ? `${book.stock} demo units available` : "Currently out of stock"}</span></div><p className="product-detail-description">{book.description || "A book for your next chapter."}</p><dl className="product-detail-facts"><div><dt>Condition</dt><dd>{book.conditionLabel || "New"}</dd></div><div><dt>Publisher</dt><dd>{book.publisher || "Not verified"}</dd></div><div><dt>Edition</dt><dd>{book.edition || "Not verified"}</dd></div><div><dt>Language</dt><dd>{book.language || "Not specified"}</dd></div><div><dt>Format</dt><dd>{book.format || "Book"}</dd></div><div><dt>ISBN</dt><dd>{book.isbn || "Not provided · unverified"}</dd></div></dl><p className="product-listing-note">{book.listingNote || "Demo sample · verify publisher details and edition before purchase."}</p><div className="product-detail-actions"><button className="button button-outline" type="button" onClick={() => toggleWishlist(book)}>{wishlistIds.includes(book.id) ? "♥ Saved" : "♡ Wishlist"}</button><button className="button button-outline" type="button" onClick={() => addToCart(book)}>Add to bag</button><button className="button button-dark" type="button" disabled={!book.stock} onClick={() => buyNow(book)}>Buy now ↗</button></div></div></article></section>;
   }
 
   return (
@@ -891,129 +978,40 @@ function App() {
       <header className="site-header">
         <div className="header-brand-group">
           <button className="header-menu-button" type="button" aria-label="Open navigation menu" aria-expanded={navigationOpen} aria-controls="site-navigation-drawer" onClick={() => setNavigationOpen(true)}><span aria-hidden="true">☰</span></button>
-          <a className="brand" href="#top" aria-label="msrbooknest home"><span className="brand-mark">m.</span><span>msrbooknest</span></a>
+          <Link className="brand" to="/" aria-label="msrbooknest home"><span className="brand-mark">m.</span><span>msrbooknest</span></Link>
         </div>
         <label className="header-search"><span aria-hidden="true">⌕</span><input value={query} onFocus={() => setShowSuggestions(true)} onBlur={() => window.setTimeout(() => setShowSuggestions(false), 160)} onChange={(event) => { setQuery(event.target.value); setShowSuggestions(true); }} onKeyDown={(event) => { if (event.key === "Enter") { setShowSuggestions(false); goToCatalog("all"); } if (event.key === "Escape") setShowSuggestions(false); }} placeholder="Search books, authors, exams, classes…" aria-label="Search the bookstore" aria-autocomplete="list" aria-expanded={showSuggestions && suggestions.length > 0} />{query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}
           {showSuggestions && suggestions.length > 0 && <div className="search-suggestions" role="listbox" aria-label="Book search suggestions">{suggestions.map((book) => <button key={book.id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(book.title); setShowSuggestions(false); goToCatalog("all"); }}><span><strong>{book.title}</strong><small>{book.author} · {book.category || "Book"}</small></span><b>{money.format(Number(book.price || 0))}</b></button>)}<button className="suggestions-all" type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { setShowSuggestions(false); goToCatalog("all"); }}>Browse all matching books ↗</button></div>}
         </label>
-        <nav className="main-nav" aria-label="Main navigation">
-          <button onClick={() => goToCatalog("all")}>Shop</button>
-          <button onClick={() => selectCategory("School Books")}>School</button>
-          <button onClick={() => selectCategory("Entrance Exams")}>Entrance</button>
-          <button onClick={() => selectCategory("Engineering")}>Engineering</button>
-          <button onClick={() => selectCategory("Medical & Health")}>Medical</button>
-          <button onClick={() => selectCategory("Stationery")}>Stationery</button>
-          <button onClick={() => selectCategory("Fiction")}>Stories</button>
-        </nav>
+        <nav className="main-nav" aria-label="Main navigation"><Link to="/books" onClick={() => goToCatalog("all")}>Books</Link><Link to="/categories" onClick={() => navigate("/categories")}>Categories</Link></nav>
         <div className="header-actions">
           <button className="wishlist-header" type="button" onClick={() => setWishlistOpen(true)} aria-label={`Open wishlist, ${wishlistIds.length} saved books`}>♡ <span>Wishlist</span><b>{wishlistIds.length}</b></button>
           <button className="sell-book-action" type="button" onClick={openBuyback}>Sell <span aria-hidden="true">↗</span></button>
-          {user ? <><button className="account-action" type="button" onClick={() => { setAdminOpen(false); document.getElementById("orders")?.scrollIntoView({ behavior: "smooth" }); }} title={`Signed in as ${user.email || "reader"}`}>Account</button>{isAdmin && <button className="admin-header-action" type="button" onClick={() => { setBuybackView(false); setAdminOpen(true); window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#admin`); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Admin</button>}<button className="sign-out-action" type="button" onClick={signOut}>Sign out</button></> : <button className="account-action" type="button" onClick={() => openAuth("login")}>Sign in</button>}
-          <button className="bag-button" type="button" onClick={() => setCartOpen(true)} aria-label={`Open bag, ${cartCount} items`}><span className="bag-icon" aria-hidden="true">♧</span><span>Bag</span><span className="bag-count">{cartCount}</span></button>
+          {user ? <><button className="account-action" type="button" onClick={() => navigate("/orders")} title={`Signed in as ${user.email || "reader"}`}>Account</button>{isAdmin && <button className="admin-header-action" type="button" onClick={() => navigate("/admin")}>Admin</button>}<button className="sign-out-action" type="button" onClick={signOut}>Sign out</button></> : <button className="account-action" type="button" onClick={() => openAuth("login")}>Sign in</button>}
+          <Link className="bag-button" to="/cart" aria-label={`Open bag, ${cartCount} items`}><span className="bag-icon" aria-hidden="true">♧</span><span>Cart</span><span className="bag-count">{cartCount}</span></Link>
         </div>
       </header>
 
-      <main id="top">{buybackView ? <BuybackDashboard user={user} onSignIn={() => openAuth("login")} onToast={showToast} /> : adminOpen && isAdmin ? <AdminDashboard /> : <>
-        <section className="marketplace-hero" aria-label="Buy or sell books">
-          <div className="marketplace-hero-heading"><span className="eyebrow">A BOOK MARKETPLACE FOR EVERY READER</span><h1>Stories keep finding<br /><em>new readers.</em></h1><p>Buy your next favorite, sell a book you’ve loved, or browse a thoughtful read for less.</p></div>
-          <div className="marketplace-carousel" role="region" aria-roledescription="carousel" aria-label="Bookstore promotions" onMouseEnter={() => setAdsHovered(true)} onMouseLeave={() => setAdsHovered(false)} onFocusCapture={() => setAdsFocused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setAdsFocused(false); }}>
-            <div className="marketplace-carousel-window">
-              <div className="marketplace-carousel-track" style={{ transform: `translateX(-${activeAd * 100}%)` }}>
-                <article className="marketplace-ad marketplace-ad-buy" role="group" aria-roledescription="slide" aria-label="1 of 3: Buy a book" aria-hidden={activeAd !== 0} inert={activeAd !== 0}>
-                  <div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-one" src={PUBLISHER_COVER_IMAGES[0]} alt="" /><img className="ad-cover-photo ad-cover-photo-two" src={PUBLISHER_COVER_IMAGES[1]} alt="" /><span className="ad-spark">✳</span></div>
-                  <div className="marketplace-ad-copy"><span className="eyebrow">FOR YOUR NEXT CHAPTER</span><h2>Find your next favorite.</h2><p>Shop handpicked books and meet a story you’ll love.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Buy a book <span aria-hidden="true">↗</span></button></div>
-                </article>
-                <article className="marketplace-ad marketplace-ad-sell" role="group" aria-roledescription="slide" aria-label="2 of 3: Sell a book" aria-hidden={activeAd !== 1} inert={activeAd !== 1}>
-                  <div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-three" src={PUBLISHER_COVER_IMAGES[2]} alt="" /><img className="ad-cover-photo ad-cover-photo-four" src={PUBLISHER_COVER_IMAGES[1]} alt="" /><span className="ad-spark">↗</span></div>
-                  <div className="marketplace-ad-copy"><span className="eyebrow">READY TO PASS ONE ALONG?</span><h2>Sell a used book.</h2><p>Share photos, get a quote, and follow each step in your account.</p><button className="button button-outline" onClick={openBuyback}>Sell a book <span aria-hidden="true">↗</span></button></div>
-                </article>
-                <article className="marketplace-ad marketplace-ad-value" role="group" aria-roledescription="slide" aria-label="3 of 3: Books under ₹400" aria-hidden={activeAd !== 2} inert={activeAd !== 2}>
-                  <div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-five" src={PUBLISHER_COVER_IMAGES[0]} alt="" /><span className="ad-price-tag">₹399<br /><small>AND UNDER</small></span></div>
-                  <div className="marketplace-ad-copy"><span className="eyebrow">A GOOD READ FOR LESS</span><h2>Stories under ₹400.</h2><p>Browse thoughtful titles that are easy on your bookshelf budget.</p><button className="button button-outline" onClick={() => goToCatalog("under400")}>Shop under ₹400 <span aria-hidden="true">↗</span></button></div>
-                </article>
-              </div>
-            </div>
-            <div className="marketplace-carousel-controls">
-              <button className="carousel-arrow" aria-label="Previous advertisement" onClick={() => setActiveAd((current) => (current + 2) % 3)}>←</button>
-              <div className="marketplace-carousel-dots" role="group" aria-label="Choose an advertisement">
-                {["Buy books", "Sell a book", "Books under ₹400"].map((label, index) => <button key={label} className={activeAd === index ? "carousel-dot active" : "carousel-dot"} aria-label={`Show ${label}`} aria-current={activeAd === index ? "true" : undefined} onClick={() => setActiveAd(index)} />)}
-              </div>
-              <span className="carousel-count">0{activeAd + 1} <span>/</span> 03</span>
-              <button className="carousel-pause" aria-label={adsPaused ? "Resume automatic promotions" : "Pause automatic promotions"} aria-pressed={adsPaused} onClick={() => setAdsPaused((paused) => !paused)}>{adsPaused ? "Play" : "Pause"}<span aria-hidden="true">{adsPaused ? " ▶" : " Ⅱ"}</span></button>
-              <button className="carousel-arrow" aria-label="Next advertisement" onClick={() => setActiveAd((current) => (current + 1) % 3)}>→</button>
-            </div>
-          </div>
-        </section>
+      <main id="top">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/books" element={<CatalogPage />} />
+          <Route path="/books/:bookId" element={<BookDetailsPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/categories/academic" element={<CatalogPage />} />
+          <Route path="/categories/fiction" element={<CatalogPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/login" element={<section className="auth-route-page"><span className="eyebrow">YOUR MSRBOOKNEST ACCOUNT</span><h1>Welcome back to your bookshelf.</h1><p>Sign in to see your orders, keep your bag in sync and manage your used-book submissions.</p></section>} />
+          <Route path="/register" element={<section className="auth-route-page"><span className="eyebrow">JOIN THE NEST</span><h1>Make the shelves yours.</h1><p>Create your account to save books and follow your orders.</p></section>} />
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/buyback" element={<BuybackDashboard user={user} onSignIn={() => openAuth("login")} onToast={showToast} />} />
+          <Route path="/admin" element={isAdmin ? <AdminDashboard /> : <Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
 
-        <section className="promise-strip" id="about">
-          <div><span className="promise-icon">✳</span><p><strong>Picked with care</strong><br />Every title earns its place.</p></div>
-          <div><span className="promise-icon">⌂</span><p><strong>From our shelves to yours</strong><br />Packed by real book people.</p></div>
-          <div><span className="promise-icon">♡</span><p><strong>A little joy, delivered</strong><br />Good reads, right on time.</p></div>
-        </section>
-
-        <section className="category-section" aria-labelledby="category-heading">
-          <div className="section-heading"><div><span className="eyebrow">A SHELF FOR EVERY CHAPTER</span><h2 id="category-heading">Browse by category</h2></div><button className="text-link" onClick={() => goToCatalog("all")}>Explore all {books.length} demo listings ↗</button></div>
-          <div className="category-grid">{CATALOG_CATEGORIES.map((category) => <button className="category-tile" key={category.name} type="button" onClick={() => selectCategory(category.name)}><span className="category-index">{category.icon}</span><span className="category-tile-copy"><strong>{category.title}</strong><small>{category.summary}</small></span><span className="category-arrow" aria-hidden="true">↗</span></button>)}</div>
-          <p className="catalog-disclaimer">Demo bookstore catalog · Sample listings and stock are illustrative. Publisher, board edition, and ISBN appear only when verified.</p>
-        </section>
-
-        <section className="budget-section"><div><span className="eyebrow">SMALL BUDGET, BIG IDEAS</span><h2>Good reads, at your price.</h2><p>Explore sample books, stationery and practice material by budget.</p></div><div className="budget-buttons">{[["under99", "Under ₹99"], ["under199", "Under ₹199"], ["under299", "Under ₹299"], ["under400", "Under ₹400"]].map(([key, label]) => <button className="budget-chip" key={key} onClick={() => goToCatalog(key)}>{label}<span aria-hidden="true">↗</span></button>)}</div></section>
-
-        {newArrivals.length > 0 && <section className="shelf-section">
-          <div className="section-heading"><div><span className="eyebrow">FRESH OFF THE SHELF</span><h2>New in the nest</h2></div><button className="text-link" onClick={() => goToCatalog("new")}>See all new arrivals ↗</button></div>
-          <div className="shelf-grid">{newArrivals.map((book) => <BookCard key={book.id} book={book} />)}</div>
-        </section>}
-
-        {bestSellers.length > 0 && <section className="shelf-section bestsellers-section">
-          <div className="section-heading"><div><span className="eyebrow">LOVED BY READERS</span><h2>The page-turners</h2></div><button className="text-link" onClick={() => goToCatalog("bestsellers")}>Shop bestsellers ↗</button></div>
-          <div className="shelf-grid">{bestSellers.map((book) => <BookCard key={book.id} book={book} />)}</div>
-        </section>}
-
-        {usedBooks.length > 0 && <section className="shelf-section used-books-section">
-          <div className="section-heading"><div><span className="eyebrow">ANOTHER READER'S GOOD FIND</span><h2>Pre-loved, ready to read</h2><p className="exam-prep-intro">Condition is shown on every used listing. All prices and stock are mock demo data.</p></div><button className="text-link" onClick={() => { setActiveCategory(""); setActiveSubcategory(""); setFacetKey(""); setFacetValue(""); setQuery(""); setConditionFilter("Used · Good"); goToCatalog("all"); }}>Browse used books ↗</button></div>
-          <div className="shelf-grid">{usedBooks.map((book) => <BookCard key={book.id} book={book} />)}</div>
-        </section>}
-
-        {examPrepBooks.length > 0 && <section className="shelf-section exam-prep-section">
-          <div className="section-heading"><div><span className="eyebrow">A LITTLE EXTRA FOCUS</span><h2>NEET &amp; JEE reference shelf</h2><p className="exam-prep-intro">Cengage and Arihant practice picks for your next big goal.</p></div><button className="text-link" onClick={() => goToCatalog("examPrep")}>Browse all exam prep ↗</button></div>
-          <div className="shelf-grid">{examPrepBooks.slice(0, 4).map((book) => <BookCard key={book.id} book={book} />)}</div>
-        </section>}
-
-        <section className="catalog-section" id="catalog">
-          <div className="catalog-layout">
-
-            <div className="catalog-content">
-              <div className="catalog-topline"><div><span className="eyebrow">YOUR NEXT FAVORITE IS HERE</span><h2>{activeCategoryLabel || "Browse the shelves"}</h2></div><span className="catalog-count">{filteredBooks.length.toLocaleString("en-IN")} sample {filteredBooks.length === 1 ? "listing" : "listings"} · page {page} of {totalPages}</span></div>
-              <div className="catalog-tools">
-            <label className="search-box"><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, topic, class, publisher…" aria-label="Search books by title, author, category, or topic" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}</label>
-            <div className="shelf-filters" role="group" aria-label="Filter books">
-              {[ ["all", "All books"], ["new", "New in"], ["bestsellers", "Bestsellers"], ["under99", "Under ₹99"], ["under199", "Under ₹199"], ["under299", "Under ₹299"], ["examPrep", "NEET / JEE"] ].map(([key, label]) => <button key={key} className={activeShelf === key ? "filter-chip active" : "filter-chip"} onClick={() => setActiveShelf(key)}>{label}</button>)}
-            </div>
-            <div className="advanced-filters">
-              {availableFacetKeys.length > 0 && <label><span>Refine by</span><select value={facetKey} onChange={(event) => { setFacetKey(event.target.value); setFacetValue(""); }}><option value="">Any detail</option>{availableFacetKeys.map((key) => <option key={key} value={key}>{key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</option>)}</select></label>}
-              {facetKey && <label><span>{facetKey.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</span><select value={facetValue} onChange={(event) => setFacetValue(event.target.value)}><option value="">All options</option>{availableFacetValues.map((value) => <option key={value}>{value}</option>)}</select></label>}
-              <label><span>Condition</span><select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}><option value="all">New & used</option><option>New</option><option>Used · Like New</option><option>Used · Very Good</option><option>Used · Good</option><option>Used · Acceptable</option></select></label>
-              <label className="sort-select"><span>Sort</span><select value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="title">Title: A–Z</option></select></label>
-              {(activeCategory || activeCategoryGroup || activeSubcategory || facetValue || conditionFilter !== "all" || query || activeShelf !== "all") && <button className="clear-filters" onClick={() => { setQuery(""); setActiveShelf("all"); setActiveCategory(""); setActiveCategoryGroup(""); setActiveSubcategory(""); setFacetKey(""); setFacetValue(""); setConditionFilter("all"); }}>Clear filters</button>}
-            </div>
-              </div>
-
-              {booksLoading ? <div className="catalog-message"><span className="loader" />Finding good reads for you…</div> : booksError ? <div className="catalog-message error-message"><strong>We can’t reach the shelves right now.</strong><span>{booksError}</span><button className="button button-dark" onClick={loadBooks}>Try again</button></div> : visibleBooks.length ? <><div className="book-grid">{visibleBooks.map((book) => <BookCard key={book.id} book={book} />)}</div><nav className="catalog-pagination" aria-label="Catalog pages"><button type="button" onClick={() => { setPage((current) => Math.max(1, current - 1)); document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" }); }} disabled={page <= 1}>← Previous</button><span>Page <strong>{page}</strong> of {totalPages}</span><button type="button" onClick={() => { setPage((current) => Math.min(totalPages, current + 1)); document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" }); }} disabled={page >= totalPages}>Next →</button></nav></> : <div className="catalog-message"><strong>No books found on this shelf.</strong><span>Try another search or browse all titles.</span><button className="text-link" onClick={() => { setQuery(""); setActiveShelf("all"); setActiveCategory(""); setActiveCategoryGroup(""); setActiveSubcategory(""); setFacetKey(""); setFacetValue(""); setConditionFilter("all"); }}>Show all books ↗</button></div>}
-            </div>
-          </div>
-        </section>
-
-        <section className="reading-note">
-          <div className="reading-note-mark">✳</div><div><span className="eyebrow">A NOTE FROM THE BOOKSELLER</span><h2>There’s a book<br />for every version of you.</h2></div><p>For who you are today, and who you’re still becoming. We’ll keep the kettle on and the shelves ready.</p>
-        </section>
-
-        <section className="orders-section" id="orders">
-          <div className="section-heading"><div><span className="eyebrow">YOUR READING JOURNEY</span><h2>Orders & deliveries</h2></div>{user && <button className="text-link" onClick={() => loadOrders()}>Refresh orders ↻</button>}</div>
-          {!user ? <div className="orders-empty"><p>Sign in to find your msrbooknest orders here.</p><button className="button button-outline" onClick={() => openAuth("login")}>Sign in</button></div> : ordersLoading ? <div className="orders-empty">Loading your orders…</div> : orders.length === 0 ? <div className="orders-empty"><p>No orders yet. Your next favorite is waiting on the shelves.</p><button className="text-link" onClick={() => goToCatalog("all")}>Browse books ↗</button></div> : <div className="orders-list">{orders.map((order) => <article className="order-card" key={order.id || order.orderRequestId}><div><span className="order-label">ORDER {order.orderRequestId}</span><strong>{order.status?.replaceAll("_", " ")}</strong><span>{new Date(order.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}</span></div><div><strong>{money.format(Number(order.totalAmount || 0))}</strong><span>{order.items?.length || 0} {order.items?.length === 1 ? "title" : "titles"}</span></div></article>)}</div>}
-        </section>
-      </>}</main>
-
-      <footer className="site-footer"><a className="brand footer-brand" href="#top"><span className="brand-mark">m.</span><span>msrbooknest</span></a><span>Small shop, big worlds.</span><span>© 2026 msrbooknest</span></footer>
+      <footer className="site-footer"><Link className="brand footer-brand" to="/"><span className="brand-mark">m.</span><span>msrbooknest</span></Link><nav className="footer-nav" aria-label="Footer navigation"><Link to="/books">All books</Link><Link to="/categories">Categories</Link><Link to="/orders">Orders</Link><button type="button" onClick={openBuyback}>Sell a book</button></nav><span>Small shop, big worlds.</span><span>© 2026 msrbooknest</span></footer>
 
       {navigationOpen && <div className="nav-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setNavigationOpen(false); }}>
         <aside className="nav-drawer" id="site-navigation-drawer" role="dialog" aria-modal="true" aria-labelledby="site-navigation-title">
@@ -1051,7 +1049,7 @@ function App() {
           </nav>
           <div className="nav-drawer-footer">
             <button className="nav-sell-link" type="button" onClick={() => { setNavigationOpen(false); openBuyback(); }}><span>Sell a book</span><span aria-hidden="true">↗</span></button>
-            <button className="nav-orders-link" type="button" onClick={() => { setNavigationOpen(false); setBuybackView(false); setAdminOpen(false); window.setTimeout(() => document.getElementById("orders")?.scrollIntoView({ behavior: "smooth" }), 0); }}>Orders &amp; deliveries<span aria-hidden="true">→</span></button>
+            <button className="nav-orders-link" type="button" onClick={() => { setNavigationOpen(false); navigate("/orders"); }}>Orders &amp; deliveries<span aria-hidden="true">→</span></button>
             {user && <button className="nav-sign-out-link" type="button" onClick={() => { setNavigationOpen(false); signOut(); }}>Sign out<span aria-hidden="true">↪</span></button>}
           </div>
         </aside>
@@ -1061,19 +1059,9 @@ function App() {
 
       {wishlistOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setWishlistOpen(false); }}><aside className="drawer wishlist-drawer" aria-label="Wishlist"><div className="drawer-header"><div><span className="eyebrow">SAVED FOR LATER</span><h2>Your wishlist <span>({wishlistBooks.length})</span></h2></div><button className="close-button" onClick={() => setWishlistOpen(false)} aria-label="Close wishlist">×</button></div>{wishlistBooks.length === 0 ? <div className="drawer-empty"><span className="empty-bag">♡</span><h3>Your next favorite?</h3><p>Tap the heart on any book to keep it close.</p><button className="button button-dark" onClick={() => { setWishlistOpen(false); goToCatalog("all"); }}>Browse the shelves</button></div> : <div className="wishlist-items">{wishlistBooks.map((book) => <article className="wishlist-item" key={book.id}><button className="wishlist-cover-button" onClick={() => { setActiveProduct(book); setWishlistOpen(false); }} aria-label={`View ${book.title} details`}><Cover book={{ ...book, id: book.id }} compact /></button><div><strong>{book.title}</strong><small>{book.author}</small><b>{money.format(Number(book.price || 0))}</b><div><button onClick={() => { addToCart(book); setWishlistOpen(false); }}>Add to bag</button><button onClick={() => toggleWishlist(book)}>Remove</button></div></div></article>)}</div>}</aside></div>}
 
-      {cartOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}>
-        <aside className="drawer" aria-label="Shopping bag">
-          <div className="drawer-header"><div><span className="eyebrow">YOUR NEXT CHAPTER</span><h2>Your bag <span>({cartCount})</span></h2></div><button className="close-button" onClick={() => setCartOpen(false)} aria-label="Close bag">×</button></div>
-          {cart.length === 0 ? <div className="drawer-empty"><span className="empty-bag">♧</span><h3>A little light in here.</h3><p>Your next good read is waiting to be found.</p><button className="button button-dark" onClick={() => { setCartOpen(false); goToCatalog("all"); }}>Explore the shelves</button></div> : <>
-            <div className="drawer-items">{cart.map((item) => <article className="drawer-item" key={item.bookId}><Cover book={{ ...item, id: item.bookId }} compact /><div className="drawer-item-copy"><h3>{item.title}</h3><p>{item.author}</p><strong>{money.format(Number(item.unitPrice || 0))}</strong><div className="quantity-control"><button onClick={() => changeQuantity(item, item.quantity - 1)} aria-label={`Decrease ${item.title} quantity`}>−</button><span>{item.quantity}</span><button onClick={() => changeQuantity(item, item.quantity + 1)} aria-label={`Increase ${item.title} quantity`}>+</button><button className="remove-button" onClick={() => changeQuantity(item, 0)}>Remove</button></div></div></article>)}</div>
-            <div className="drawer-summary"><div className="subtotal-row"><span>Subtotal</span><strong>{money.format(cartTotal)}</strong></div><p>Shipping and taxes are calculated at checkout.</p><button className="button button-dark button-full" onClick={() => { setCartOpen(false); setCheckoutOpen(true); }}>Continue to checkout <span>↗</span></button><button className="continue-link" onClick={() => { setCartOpen(false); goToCatalog("all"); }}>Keep browsing</button></div>
-          </>}
-        </aside>
-      </div>}
-
-      {authOpen && <div className="overlay modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}>
+      {authOpen && <div className={authRoute ? "auth-route-overlay" : "overlay modal-overlay"} onMouseDown={(event) => { if (event.target === event.currentTarget) closeAuth(); }}>
         <section className="dialog" aria-labelledby="auth-title">
-          <div className="dialog-top"><span className="brand-mark">b.</span><button className="close-button" onClick={() => setAuthOpen(false)} aria-label="Close sign in">×</button></div>
+          <div className="dialog-top"><span className="brand-mark">m.</span><button className="close-button" onClick={closeAuth} aria-label="Close sign in">×</button></div>
           <span className="eyebrow">{authMode === "login" ? "WELCOME BACK" : authMode === "register" ? registrationStep === "details" ? "JOIN THE NEST" : "ACCOUNT VERIFICATION" : "ACCOUNT RECOVERY"}</span>
           <h2 id="auth-title">{authMode === "login" ? "Good to see you." : authMode === "forgot" ? "Forgot your password?" : authMode === "reset" ? "Check your email." : registrationStep === "details" ? "Let’s make it official." : registrationStep === "phone" ? "Verify your phone." : registrationStep === "emailReady" ? "Verify your email." : "Enter your email code."}</h2>
           <p className="dialog-intro">{authMode === "login" ? "Sign in to pick up where your last story left off." : authMode === "forgot" ? "Enter the email or mobile number on your account. We’ll send a one-time code to your registered email." : authMode === "reset" ? recoveryMaskedEmail ? `Enter the code sent to ${recoveryMaskedEmail}, then choose a new password.` : "If an account matches those details, a code was sent to its registered email. Enter it below to continue." : registrationStep === "details" ? "Create your account and make the shelves yours." : registrationStep === "phone" ? `Enter the 6-digit code for ${registration.phoneNumber}.` : registrationStep === "emailReady" ? `Your phone is verified. Send a code to ${registration.email} to finish creating your account.` : `Enter the 6-digit code sent to ${registration.email}.`}</p>
@@ -1132,8 +1120,6 @@ function App() {
           </form>
         </section>
       </div>}
-
-      {checkoutOpen && <div className="overlay modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false); }}><section className="dialog checkout-dialog" aria-labelledby="checkout-title"><div className="dialog-top"><span className="eyebrow">ALMOST YOURS</span><button className="close-button" onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">×</button></div><h2 id="checkout-title">Where should we send your books?</h2><p className="dialog-intro">Your bag has {cartCount} {cartCount === 1 ? "book" : "books"} · {money.format(cartTotal)}</p><form className="dialog-form" onSubmit={submitCheckout}><label>Recipient name<input name="customerName" autoComplete="name" defaultValue={user?.name || user?.email?.split("@")[0] || ""} required /></label><label>Phone number<input name="phone" type="tel" autoComplete="tel" required placeholder="10 digit number" /></label><label>Delivery address<textarea name="address" autoComplete="street-address" rows="3" required placeholder="House, street, city, PIN code" /></label><label>Payment method<select name="paymentMethod" value={checkoutPaymentMethod} onChange={(event) => setCheckoutPaymentMethod(event.target.value)}><option>UPI</option><option>Credit Card</option><option>Debit Card</option></select></label>{checkoutPaymentMethod === "UPI" && <label>Demo UPI ID<input name="paymentAddress" defaultValue="success@upi" required /><small>Use fail@upi to see a simulated NPCI decline.</small></label>}<p className="identity-note">Payments use a simulator; no money is moved.</p><button className="button button-dark button-full" disabled={checkoutBusy}>{checkoutBusy ? "Placing your order…" : `Place order · ${money.format(cartTotal)}`}</button></form></section></div>}
 
       {toast && <div className="toast" role="status" aria-live="polite">{toast}<span aria-hidden="true">✳</span></div>}
     </>
