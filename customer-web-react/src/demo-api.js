@@ -176,6 +176,86 @@ function completePayment(item, actor) {
   addTimeline(item, `Mock payout of ₹${Number(accepted.amount).toFixed(0)} completed once.`, actor);
 }
 
+function normalizeCheckoutItems(items) {
+  if (!Array.isArray(items) || items.length === 0) throw new Error("Your bag is empty.");
+  return items.map((item) => {
+    const bookId = String(item.bookId ?? item.id ?? "").trim();
+    const quantity = Number(item.quantity);
+    if (!bookId || !Number.isInteger(quantity) || quantity < 1) throw new Error("Your bag has an invalid book quantity.");
+    return { bookId, quantity };
+  }).sort((left, right) => left.bookId.localeCompare(right.bookId));
+}
+
+function demoCheckoutQuote(items) {
+  const requestedItems = normalizeCheckoutItems(items);
+  const cartItems = normalizeCheckoutItems(getCart());
+  if (JSON.stringify(requestedItems) !== JSON.stringify(cartItems)) {
+    throw new Error("Your bag changed. Refresh it before checkout.");
+  }
+  const products = allProducts();
+  const quoteItems = requestedItems.map(({ bookId, quantity }) => {
+    const book = products.find((item) => String(item.id) === bookId);
+    if (!book) throw new Error("A book in your bag is no longer in the demo catalog.");
+    if (quantity > Number(book.stock || 0)) throw new Error(`${book.title} does not have enough demo stock.`);
+    const unitPrice = Number(book.price || 0);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error(`${book.title} has an invalid demo price.`);
+    return {
+      bookId: book.id,
+      title: book.title,
+      author: book.author,
+      imageUrl: book.imageUrl,
+      quantity,
+      unitPrice,
+      lineTotal: unitPrice * quantity,
+    };
+  });
+  const subtotal = quoteItems.reduce((total, item) => total + item.lineTotal, 0);
+  return {
+    items: quoteItems,
+    subtotal,
+    discountAmount: 0,
+    deliveryAmount: 0,
+    finalAmount: subtotal,
+    currency: "INR",
+    demoOnly: true,
+  };
+}
+
+async function checkoutFingerprint(user, payload) {
+  const canonical = JSON.stringify([
+    String(user.email || "").trim().toLowerCase(),
+    String(payload.customerName || "").trim(),
+    String(payload.phone || "").trim(),
+    String(payload.address || "").trim(),
+    "UPI",
+    normalizeCheckoutItems(payload.items),
+  ]);
+  if (globalThis.crypto?.subtle) {
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  let hash = 2166136261;
+  for (const character of canonical) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+  return (hash >>> 0).toString(16);
+}
+
+function ownedDemoOrder(orderRequestId) {
+  const user = requireUser();
+  const order = allOrders().find((item) => item.orderRequestId === orderRequestId && item.customerEmail === user.email);
+  if (!order) throw new Error("This demo order could not be found.");
+  return { user, order };
+}
+
+function demoPaymentView(order, attempt) {
+  return {
+    ...attempt,
+    orderRequestId: order.orderRequestId,
+    amount: order.totalAmount,
+    currency: "INR",
+    demoOnly: true,
+  };
+}
+
 export const demoApi = {
   async login({ identifier, password }) {
     const user = findUser(identifier);
@@ -376,19 +456,133 @@ export const demoApi = {
     return clone(allOrders().filter((order) => order.customerEmail === user.email).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
   },
 
-  async quoteCheckout() {
-    throw new Error("Secure checkout needs the Spring Boot services. The public browser demo does not calculate payment totals or accept payments.");
+  async quoteCheckout(_token, items) {
+    requireUser();
+    return clone(demoCheckoutQuote(items));
   },
 
   async placeOrder(_token, payload) {
-    requireUser();
-    throw new Error("Secure checkout needs the Spring Boot services and Razorpay test credentials. No demo payment was created.");
+    const user = requireUser();
+    const orderRequestId = String(payload.orderRequestId || "").trim();
+    if (!orderRequestId) throw new Error("Checkout reference is missing. Try again.");
+    const fingerprint = await checkoutFingerprint(user, payload);
+    const orders = allOrders();
+    const priorOrder = orders.find((order) => order.orderRequestId === orderRequestId);
+    if (priorOrder) {
+      if (priorOrder.customerEmail !== user.email || priorOrder.idempotencyFingerprint !== fingerprint) {
+        throw new Error("This checkout reference was already used with different details. Refresh checkout to create a new reference.");
+      }
+      return clone(priorOrder);
+    }
+    const quote = demoCheckoutQuote(payload.items);
+    const customerName = String(payload.customerName || "").trim();
+    const phone = String(payload.phone || "").trim();
+    const address = String(payload.address || "").trim();
+    if (!customerName || !phone || !address) throw new Error("Enter your name, phone number, and delivery address.");
+    const now = stamp();
+    const order = {
+      id: makeId("ORDER"),
+      orderRequestId,
+      idempotencyFingerprint: fingerprint,
+      customerEmail: user.email,
+      customerName,
+      phone,
+      address,
+      paymentMethod: "UPI",
+      status: "PENDING_PAYMENT",
+      paymentStatus: "NOT_STARTED",
+      subtotalAmount: quote.subtotal,
+      discountAmount: quote.discountAmount,
+      shippingAmount: quote.deliveryAmount,
+      totalAmount: quote.finalAmount,
+      items: quote.items,
+      paymentAttempts: [],
+      demoOnly: true,
+      createdAt: now,
+      timeline: [{ message: "Demo order created. No payment was sent.", actor: user.email, createdAt: now }],
+    };
+    saveOrders([order, ...orders]);
+    return clone(order);
   },
 
-  async getOwnedOrder() { throw new Error("Order details are available when the Spring Boot services are connected."); },
-  async createPaymentOrder() { throw new Error("Razorpay test checkout is not configured in the public browser demo."); },
+  async getOwnedOrder(_token, orderRequestId) {
+    return clone(ownedDemoOrder(String(orderRequestId || "")).order);
+  },
+
+  async createPaymentOrder(_token, orderRequestId, attemptRequestId, idempotencyKey = attemptRequestId) {
+    const { order } = ownedDemoOrder(String(orderRequestId || ""));
+    if (order.status === "PAID") {
+      const paidAttempt = order.paymentAttempts.find((attempt) => attempt.status === "SUCCESS");
+      if (paidAttempt) return clone(demoPaymentView(order, paidAttempt));
+    }
+    const requestId = String(attemptRequestId || "").trim();
+    if (!requestId) throw new Error("Payment attempt reference is missing. Try again.");
+    const attemptKey = String(idempotencyKey || requestId).trim();
+    const attempts = order.paymentAttempts || [];
+    const existing = attempts.find((attempt) => attempt.attemptRequestId === requestId);
+    if (existing) {
+      if (existing.idempotencyKey !== attemptKey) throw new Error("This payment attempt reference was already used.");
+      return clone(demoPaymentView(order, existing));
+    }
+    if (attempts.some((attempt) => attempt.idempotencyKey === attemptKey)) {
+      throw new Error("This payment idempotency key was already used for a different attempt.");
+    }
+    const previous = attempts.at(-1);
+    if (previous && !["FAILED", "CANCELLED"].includes(previous.status)) {
+      throw new Error("Finish or retry the current demo payment attempt first.");
+    }
+    const attempt = {
+      attemptRequestId: requestId,
+      idempotencyKey: attemptKey,
+      status: "READY",
+      verificationStatus: "SIMULATED",
+      message: "Demo checkout ready. No real payment will be sent.",
+      createdAt: stamp(),
+    };
+    order.paymentAttempts = [...attempts, attempt];
+    order.paymentStatus = "READY";
+    saveOrders(allOrders().map((item) => item.orderRequestId === order.orderRequestId ? order : item));
+    return clone(demoPaymentView(order, attempt));
+  },
+
+  async simulateDemoPayment(_token, orderRequestId, attemptRequestId, outcome) {
+    const { user, order } = ownedDemoOrder(String(orderRequestId || ""));
+    const requestedOutcome = String(outcome || "").toUpperCase();
+    if (!["SUCCESS", "FAILED"].includes(requestedOutcome)) throw new Error("Choose a successful or failed demo payment outcome.");
+    const attempts = order.paymentAttempts || [];
+    const attempt = attempts.find((item) => item.attemptRequestId === String(attemptRequestId || ""));
+    if (!attempt) throw new Error("Start the demo payment before choosing an outcome.");
+    if (order.status === "PAID") return clone(demoPaymentView(order, attempts.find((item) => item.status === "SUCCESS") || attempt));
+    if (attempt.status !== "READY") {
+      if (attempt.status === requestedOutcome) return clone(demoPaymentView(order, attempt));
+      throw new Error("This payment attempt is already complete. Start a new attempt to retry.");
+    }
+    const now = stamp();
+    attempt.status = requestedOutcome;
+    attempt.verificationStatus = "SIMULATED";
+    attempt.message = requestedOutcome === "SUCCESS"
+      ? "Simulated UPI payment complete. No real money was charged."
+      : "Simulated payment failed. No real money was charged; you can retry.";
+    attempt.completedAt = now;
+    if (requestedOutcome === "SUCCESS") {
+      order.status = "PAID";
+      order.paymentStatus = "SUCCESS";
+      order.paidAt = now;
+      order.timeline = [...(order.timeline || []), { message: "Demo UPI payment marked successful once. No real charge was made.", actor: user.email, createdAt: now }];
+    } else {
+      order.paymentStatus = "FAILED";
+      order.timeline = [...(order.timeline || []), { message: "Demo payment attempt failed. The order can be retried.", actor: user.email, createdAt: now }];
+    }
+    saveOrders(allOrders().map((item) => item.orderRequestId === order.orderRequestId ? order : item));
+    return clone(demoPaymentView(order, attempt));
+  },
+
   async verifyPayment() { throw new Error("Payment verification is available through the configured Spring Boot backend."); },
-  async getPaymentStatus() { throw new Error("Payment status is available through the configured Spring Boot backend."); },
+  async getPaymentStatus(_token, orderRequestId) {
+    const { order } = ownedDemoOrder(String(orderRequestId || ""));
+    const attempt = (order.paymentAttempts || []).at(-1);
+    return attempt ? clone(demoPaymentView(order, attempt)) : null;
+  },
 
   async getBuybacks() {
     const user = requireUser();

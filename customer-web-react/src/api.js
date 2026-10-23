@@ -105,4 +105,5 @@ const springApi = {
   resolveBuybackDispute: (token, id, payload) => request(API.buyback, `/api/buybacks/${id}/dispute/resolve`, { ...json("POST", payload), token }),
 };
 
-export const api = import.meta.env.VITE_DEMO_MODE === "true" ? demoApi : springApi;
+export const isBrowserDemo = import.meta.env.VITE_DEMO_MODE === "true";
+export const api = isBrowserDemo ? demoApi : springApi;

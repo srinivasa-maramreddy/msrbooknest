@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api } from "./api.js";
+import { api, isBrowserDemo } from "./api.js";
 import { clearSession, getAccessToken, getIdentity, saveSession, subscribeIdentity } from "./auth.js";
 import BuybackDashboard from "./BuybackDashboard.jsx";
 import { BOOK_PAGE_SIZE, CATALOG_CATEGORIES, readBookSpecifications } from "./catalog.js";
 
-const STATIC_PAGES_DEMO = import.meta.env.VITE_DEMO_MODE === "true";
+const STATIC_PAGES_DEMO = isBrowserDemo;
 const CART_KEY = "booknest_react_guest_cart";
 const PUBLISHER_COVER_IMAGES = [
   "https://d9h54mr6do0h0.cloudfront.net/bookimage/9789366602257.jpg",
@@ -143,7 +143,8 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const successHandled = useRef(false);
-  const isVerifiedSuccess = payment?.status === "SUCCESS" && payment?.verificationStatus === "VERIFIED";
+  const isVerifiedSuccess = payment?.status === "SUCCESS"
+    && (payment?.verificationStatus === "VERIFIED" || (STATIC_PAGES_DEMO && payment?.verificationStatus === "SIMULATED"));
 
   useEffect(() => {
     if (!token || !orderRequestId) {
@@ -220,6 +221,10 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
         rememberPaymentAttemptId(orderRequestId, checkout.attemptRequestId);
       }
       if (checkout.status === "SUCCESS" && checkout.verificationStatus === "VERIFIED") return;
+      if (checkout?.demoOnly) {
+        setNotice(checkout.message || "Demo checkout is ready. No real payment will be sent.");
+        return;
+      }
       if (!checkout.gatewayOrderId || !checkout.keyId) {
         setNotice(checkout.message || "Payment is processing. Check the payment status before retrying.");
         return;
@@ -287,6 +292,22 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
     }
   }
 
+  async function completeBrowserDemoPayment(outcome) {
+    if (!STATIC_PAGES_DEMO || !order || !token || !attemptRequestId || busy) return;
+    setBusy(true);
+    setError("");
+    setNotice("Saving the simulated payment result…");
+    try {
+      const result = await api.simulateDemoPayment(token, orderRequestId, attemptRequestId, outcome);
+      setPayment(result);
+      setNotice(result.message || "Demo payment result saved. No real payment was sent.");
+    } catch (paymentError) {
+      setError(paymentError.message || "The demo payment could not be completed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) return <section className="route-content payment-page"><div className="payment-state-card">Loading your secure checkout…</div></section>;
   if (error && !order) return <section className="route-content payment-page"><div className="route-page-heading"><span className="eyebrow">SECURE CHECKOUT</span><h1>Order unavailable</h1><p>{error}</p></div><button className="button button-dark" onClick={() => navigate("/cart")}>Return to cart</button></section>;
   if (!order) return null;
@@ -297,24 +318,32 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
 
   return (
     <section className="route-content payment-page">
-      <div className="payment-page-heading"><span className="eyebrow">MSRBOOKNEST · SECURE CHECKOUT</span><h1>{phase === "success" ? "Payment successful." : phase === "failed" ? "Payment failed." : phase === "cancelled" ? "Payment cancelled." : phase === "pending" ? "Payment is processing." : "Choose how to pay."}</h1><p>Order reference <strong>{orderRequestId}</strong></p></div>
+      <div className="payment-page-heading"><span className="eyebrow">{STATIC_PAGES_DEMO ? "MSRBOOKNEST · DEMO CHECKOUT" : "MSRBOOKNEST · SECURE CHECKOUT"}</span><h1>{phase === "success" ? "Payment successful." : phase === "failed" ? "Payment failed." : phase === "cancelled" ? "Payment cancelled." : phase === "pending" ? "Payment is processing." : STATIC_PAGES_DEMO ? "Try a simulated payment." : "Choose how to pay."}</h1><p>Order reference <strong>{orderRequestId}</strong></p></div>
       {phase === "success" ? (
-        <div className="payment-result-card payment-result-success"><span className="payment-result-icon" aria-hidden="true">✓</span><span className="eyebrow">PAYMENT VERIFIED</span><h2>Payment Successful</h2><p>Razorpay confirmed this UPI payment. Your order is now being prepared.</p><dl><div><dt>Order ID</dt><dd>{orderRequestId}</dd></div><div><dt>Transaction reference</dt><dd>{payment?.gatewayPaymentId || payment?.providerReference || "Verified by Razorpay"}</dd></div><div><dt>Amount paid</dt><dd>{moneyExact.format(amount)}</dd></div><div><dt>Payment method</dt><dd>UPI</dd></div><div><dt>Payment date</dt><dd>{payment?.paidAt ? new Date(payment.paidAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Just now"}</dd></div><div><dt>Delivery address</dt><dd>{order.address}</dd></div></dl><div className="payment-result-actions"><button className="button button-dark" onClick={() => navigate("/orders")}>View order</button><button className="button button-outline" onClick={() => navigate("/books")}>Continue shopping</button></div></div>
+        <div className="payment-result-card payment-result-success"><span className="payment-result-icon" aria-hidden="true">✓</span><span className="eyebrow">{STATIC_PAGES_DEMO ? "DEMO PAYMENT COMPLETE" : "PAYMENT VERIFIED"}</span><h2>{STATIC_PAGES_DEMO ? "Simulated payment complete" : "Payment Successful"}</h2><p>{STATIC_PAGES_DEMO ? "This browser-only demo marked the payment successful. No real money was charged." : "Razorpay confirmed this UPI payment. Your order is now being prepared."}</p><dl><div><dt>Order ID</dt><dd>{orderRequestId}</dd></div><div><dt>{STATIC_PAGES_DEMO ? "Demo reference" : "Transaction reference"}</dt><dd>{payment?.gatewayPaymentId || payment?.providerReference || payment?.attemptRequestId || "Verified by Razorpay"}</dd></div><div><dt>Amount {STATIC_PAGES_DEMO ? "shown" : "paid"}</dt><dd>{moneyExact.format(amount)}</dd></div><div><dt>Payment method</dt><dd>UPI</dd></div><div><dt>{STATIC_PAGES_DEMO ? "Demo date" : "Payment date"}</dt><dd>{payment?.paidAt || payment?.completedAt ? new Date(payment.paidAt || payment.completedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Just now"}</dd></div><div><dt>Delivery address</dt><dd>{order.address}</dd></div></dl><div className="payment-result-actions"><button className="button button-dark" onClick={() => navigate("/orders")}>View order</button><button className="button button-outline" onClick={() => navigate("/books")}>Continue shopping</button></div></div>
       ) : phase === "failed" || phase === "cancelled" ? (
-        <div className={`payment-result-card payment-result-${phase}`}><span className="payment-result-icon" aria-hidden="true">{phase === "failed" ? "!" : "↺"}</span><span className="eyebrow">ORDER {phase === "failed" ? "NOT PAID" : "STATUS CHECKED"}</span><h2>Payment {phase === "failed" ? "Failed" : "Cancelled"}</h2><p>{payment?.message || (phase === "failed" ? "Razorpay reports that this attempt was not completed." : "Checkout was closed. We checked with Razorpay before showing this status.")}</p><strong className="payment-result-amount">{moneyExact.format(amount)}</strong><p>Order reference: <strong>{orderRequestId}</strong></p><div className="payment-result-actions"><button className="button button-dark" onClick={continueToPay} disabled={busy || modalOpen}>{busy ? "Preparing checkout…" : modalOpen ? "Razorpay checkout is open…" : "Retry payment"}</button><button className="button button-outline" onClick={() => navigate("/cart")}>Return to cart</button><button className="text-link" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking…" : "Check status"}</button></div></div>
+        <div className={`payment-result-card payment-result-${phase}`}><span className="payment-result-icon" aria-hidden="true">{phase === "failed" ? "!" : "↺"}</span><span className="eyebrow">ORDER {phase === "failed" ? "NOT PAID" : "STATUS CHECKED"}</span><h2>Payment {phase === "failed" ? "Failed" : "Cancelled"}</h2><p>{payment?.message || (phase === "failed" ? (STATIC_PAGES_DEMO ? "The simulated payment failed. No charge was made; you can retry." : "Razorpay reports that this attempt was not completed.") : "Checkout was closed. We checked with Razorpay before showing this status.")}</p><strong className="payment-result-amount">{moneyExact.format(amount)}</strong><p>Order reference: <strong>{orderRequestId}</strong></p><div className="payment-result-actions"><button className="button button-dark" onClick={continueToPay} disabled={busy || modalOpen}>{busy ? "Preparing checkout…" : modalOpen ? "Razorpay checkout is open…" : "Retry payment"}</button><button className="button button-outline" onClick={() => navigate("/cart")}>Return to cart</button>{!STATIC_PAGES_DEMO && <button className="text-link" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking…" : "Check status"}</button>}</div></div>
       ) : phase === "pending" ? (
         <div className="payment-result-card payment-result-pending"><span className="payment-result-icon" aria-hidden="true">…</span><span className="eyebrow">PLEASE WAIT</span><h2>Payment is Processing</h2><p>{notice || "We couldn't verify your payment yet. Your payment status is being checked."}</p><strong className="payment-result-amount">{moneyExact.format(amount)}</strong><p>Order reference: <strong>{orderRequestId}</strong></p><div className="payment-result-actions"><button className="button button-dark" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking…" : "Check payment status"}</button><button className="button button-outline" onClick={() => navigate("/orders")}>View orders</button></div><small>Do not start a second order. This checkout reference stays the same while Razorpay confirms the result.</small></div>
       ) : (
         <div className="payment-page-layout">
           <div className="payment-main-column">
+            {STATIC_PAGES_DEMO ? <>
+              <article className="payment-method-card"><span className="payment-step">1</span><div className="payment-card-content"><div className="payment-card-title"><span className="upi-icon" aria-hidden="true">UPI</span><div><h2>Simulated UPI checkout</h2><p>Try the success or failure path in this browser demo.</p></div></div><div className="upi-brands"><span>Demo only</span><small>No UPI app opens and no real payment is sent.</small></div></div><span className="payment-selected-check" aria-label="Selected">✓</span></article>
+              <div className="payment-security-note"><span aria-hidden="true">⌑</span><p><strong>Browser demo payment</strong><br />This simulates payment status so you can demonstrate the order flow. It does not charge money or contact a payment provider.</p></div>
+              {notice && <div className="payment-inline-notice" role="status">{notice}</div>}
+              {error && <div className="payment-inline-error" role="alert">{error}</div>}
+              {payment?.demoOnly && payment?.status === "READY" ? <div className="payment-demo-actions"><button className="button button-yellow payment-continue-button" onClick={() => completeBrowserDemoPayment("SUCCESS")} disabled={busy}>{busy ? "Saving demo result…" : "Simulate successful payment"}</button><button className="button button-outline payment-continue-button" onClick={() => completeBrowserDemoPayment("FAILED")} disabled={busy}>{busy ? "Saving demo result…" : "Simulate failed payment"}</button></div> : <button className="button button-yellow payment-continue-button" onClick={continueToPay} disabled={busy}>{busy ? "Preparing demo checkout…" : "Begin demo payment"}</button>}
+            </> : <>
             <article className="payment-method-card"><span className="payment-step">1</span><div className="payment-card-content"><div className="payment-card-title"><span className="upi-icon" aria-hidden="true">UPI</span><div><h2>Pay by UPI</h2><p>Use a UPI app, intent, or QR option offered by secure checkout.</p></div></div><div className="upi-brands" aria-label="UPI apps supported by Razorpay where available"><span>G Pay</span><span>PhonePe</span><span>Paytm</span><small>Availability depends on your device and checkout options.</small></div></div><span className="payment-selected-check" aria-label="Selected">✓</span></article>
             <div className="payment-security-note"><span aria-hidden="true">⌑</span><p><strong>Secure payment checkout</strong><br />You will continue to Razorpay’s official checkout to authorize the payment. MSRBookNest never asks for your UPI PIN or banking password.</p></div>
             {notice && <div className="payment-inline-notice" role="status">{notice}</div>}
             {error && <div className="payment-inline-error" role="alert">{error}</div>}
             <button className="button button-yellow payment-continue-button" onClick={continueToPay} disabled={busy || modalOpen}>{busy ? "Preparing secure checkout…" : modalOpen ? "Razorpay checkout is open…" : `Continue to Pay · ${moneyExact.format(amount)}`}</button>
             <button className="payment-check-link" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking with Razorpay…" : "Already paid? Check payment status"}</button>
+            </>}
           </div>
-          <aside className="payment-summary-card"><div className="payment-summary-heading"><span className="eyebrow">ORDER SUMMARY</span><span>Delivery details</span></div><div className="payment-summary-items">{displayItems.map((item) => { const localBook = cartItems.find((book) => String(book.bookId ?? book.id) === String(item.bookId)) || catalogBooks.find((book) => String(book.id) === String(item.bookId)) || {}; return <article className="payment-summary-item" key={item.id || item.bookId}><Cover book={{ ...localBook, ...item, id: item.bookId, imageUrl: localBook.imageUrl || item.imageUrl }} compact /><div><strong>{item.title}</strong><small>Qty {item.quantity} × {moneyExact.format(Number(item.unitPrice || 0))}</small></div><b>{moneyExact.format(Number(item.unitPrice || 0) * Number(item.quantity || 0))}</b></article>; })}</div><dl className="payment-totals"><div><dt>Subtotal</dt><dd>{moneyExact.format(Number(order.totalAmount || 0) - Number(order.shippingAmount || 0) + Number(order.discountAmount || 0))}</dd></div><div><dt>Discount</dt><dd>− {moneyExact.format(Number(order.discountAmount || 0))}</dd></div><div><dt>Delivery</dt><dd>{Number(order.shippingAmount || 0) === 0 ? "FREE" : moneyExact.format(Number(order.shippingAmount || 0))}</dd></div><div className="payment-grand-total"><dt>Final payable</dt><dd>{moneyExact.format(amount)}</dd></div></dl><div className="payment-address"><span className="eyebrow">DELIVERING TO</span><strong>{order.customerName}</strong><span>{order.address}</span><span>{order.phone}</span></div></aside>
+          <aside className="payment-summary-card"><div className="payment-summary-heading"><span className="eyebrow">ORDER SUMMARY</span><span>Delivery details</span></div><div className="payment-summary-items">{displayItems.map((item) => { const localBook = cartItems.find((book) => String(book.bookId ?? book.id) === String(item.bookId)) || catalogBooks.find((book) => String(book.id) === String(item.bookId)) || {}; return <article className="payment-summary-item" key={item.id || item.bookId}><Cover book={{ ...localBook, ...item, id: item.bookId, imageUrl: localBook.imageUrl || item.imageUrl }} compact /><div><strong>{item.title}</strong><small>Qty {item.quantity} × {moneyExact.format(Number(item.unitPrice || 0))}</small></div><b>{moneyExact.format(Number(item.unitPrice || 0) * Number(item.quantity || 0))}</b></article>; })}</div><dl className="payment-totals"><div><dt>Subtotal</dt><dd>{moneyExact.format(Number(order.totalAmount || 0) - Number(order.shippingAmount || 0) + Number(order.discountAmount || 0))}</dd></div><div><dt>Discount</dt><dd>− {moneyExact.format(Number(order.discountAmount || 0))}</dd></div><div><dt>Delivery</dt><dd>{Number(order.shippingAmount || 0) === 0 ? "FREE" : moneyExact.format(Number(order.shippingAmount || 0))}</dd></div><div className="payment-grand-total"><dt>{STATIC_PAGES_DEMO ? "Demo total" : "Final payable"}</dt><dd>{moneyExact.format(amount)}</dd></div></dl><div className="payment-address"><span className="eyebrow">DELIVERING TO</span><strong>{order.customerName}</strong><span>{order.address}</span><span>{order.phone}</span></div></aside>
         </div>
       )}
     </section>
@@ -1488,7 +1517,7 @@ function App() {
   function CheckoutPage() {
     const quoteItems = checkoutQuote?.items || [];
     return <section className="route-content checkout-page">
-      <div className="route-page-heading"><span className="eyebrow">MSRBOOKNEST CHECKOUT</span><h1>Confirm your delivery.</h1><p>Review your books and address. Prices and available stock are checked by the bookstore services.</p></div>
+      <div className="route-page-heading"><span className="eyebrow">MSRBOOKNEST CHECKOUT</span><h1>Confirm your delivery.</h1><p>{STATIC_PAGES_DEMO ? "Review your books and address. This public demo uses sample prices saved in this browser." : "Review your books and address. Prices and available stock are checked by the bookstore services."}</p></div>
       <div className="checkout-progress"><span className="checkout-progress-step active"><b>1</b> Delivery</span><i aria-hidden="true" /><span className="checkout-progress-step"><b>2</b> Payment</span><i aria-hidden="true" /><span className="checkout-progress-step"><b>3</b> Confirmation</span></div>
       {cart.length === 0 ? <div className="orders-empty"><p>Add a book to your bag before checking out.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Browse books</button></div>
         : !user ? <div className="checkout-signin"><p>Sign in before placing your order.</p><button className="button button-dark" onClick={() => openAuth("login", "/checkout")}>Sign in to continue</button></div>
@@ -1499,13 +1528,13 @@ function App() {
                 <label>Phone number<input name="phone" type="tel" autoComplete="tel" inputMode="tel" value={checkoutDraft.phone} onChange={(event) => setCheckoutDraft((draft) => ({ ...draft, phone: event.target.value }))} required placeholder="10 digit number" /></label>
                 <label className="checkout-address-field">Delivery address<textarea name="address" autoComplete="street-address" rows="3" value={checkoutDraft.address} onChange={(event) => setCheckoutDraft((draft) => ({ ...draft, address: event.target.value }))} required placeholder="House, street, city, state and PIN code" /><small>You can edit this address before continuing to payment.</small></label>
               </div></article>
-              <article className="checkout-panel"><div className="checkout-panel-heading"><span className="checkout-panel-number">2</span><div><h2>Your books</h2><p>{cartCount} {cartCount === 1 ? "book" : "books"} in your bag · inventory checked now</p></div><button className="text-link" type="button" onClick={() => navigate("/cart")}>Edit bag</button></div>
+              <article className="checkout-panel"><div className="checkout-panel-heading"><span className="checkout-panel-number">2</span><div><h2>Your books</h2><p>{cartCount} {cartCount === 1 ? "book" : "books"} in your bag · {STATIC_PAGES_DEMO ? "demo stock checked now" : "inventory checked now"}</p></div><button className="text-link" type="button" onClick={() => navigate("/cart")}>Edit bag</button></div>
                 {checkoutQuoteLoading ? <div className="checkout-quote-state"><span className="loader" />Checking price and availability…</div> : checkoutQuoteError ? <div className="checkout-quote-error" role="alert"><strong>We need to refresh this checkout.</strong><span>{checkoutQuoteError}</span><button type="button" className="button button-outline" onClick={() => setCheckoutQuoteRefresh((current) => current + 1)}>Refresh price and stock</button></div> : checkoutQuote ? <div className="checkout-book-list">{quoteItems.map((item) => { const cartBook = cart.find((book) => String(book.bookId ?? book.id) === String(item.bookId)) || {}; return <article className="checkout-book-row" key={item.bookId}><Cover book={{ ...cartBook, ...item, id: item.bookId, imageUrl: item.imageUrl || cartBook.imageUrl }} compact /><div className="checkout-book-copy"><strong>{item.title}</strong><span>Qty {item.quantity} · {moneyExact.format(Number(item.unitPrice || 0))} each</span></div><b>{moneyExact.format(Number(item.lineTotal || 0))}</b></article>; })}</div> : <div className="checkout-quote-state">Sign in to verify price and stock availability.</div>}
               </article>
             </div>
-            <aside className="checkout-order-summary"><span className="eyebrow">ORDER SUMMARY</span><div className="checkout-summary-item-count">{cartCount} {cartCount === 1 ? "book" : "books"}</div>{checkoutQuote && <><dl><div><dt>Subtotal</dt><dd>{moneyExact.format(Number(checkoutQuote.subtotal || 0))}</dd></div><div><dt>Discount</dt><dd>− {moneyExact.format(Number(checkoutQuote.discountAmount || 0))}</dd></div><div><dt>Delivery</dt><dd>{Number(checkoutQuote.deliveryAmount || 0) === 0 ? "FREE" : moneyExact.format(Number(checkoutQuote.deliveryAmount || 0))}</dd></div></dl><div className="checkout-final-total"><span>Final payable</span><strong>{moneyExact.format(Number(checkoutQuote.finalAmount || 0))}</strong><small>INR · final amount verified by the backend</small></div></>}
+            <aside className="checkout-order-summary"><span className="eyebrow">ORDER SUMMARY</span><div className="checkout-summary-item-count">{cartCount} {cartCount === 1 ? "book" : "books"}</div>{checkoutQuote && <><dl><div><dt>Subtotal</dt><dd>{moneyExact.format(Number(checkoutQuote.subtotal || 0))}</dd></div><div><dt>Discount</dt><dd>− {moneyExact.format(Number(checkoutQuote.discountAmount || 0))}</dd></div><div><dt>Delivery</dt><dd>{Number(checkoutQuote.deliveryAmount || 0) === 0 ? "FREE" : moneyExact.format(Number(checkoutQuote.deliveryAmount || 0))}</dd></div></dl><div className="checkout-final-total"><span>{STATIC_PAGES_DEMO ? "Demo total" : "Final payable"}</span><strong>{moneyExact.format(Number(checkoutQuote.finalAmount || 0))}</strong><small>{STATIC_PAGES_DEMO ? "Sample price · no real charge" : "INR · final amount verified by the backend"}</small></div></>}
               {checkoutQuoteError && <p className="checkout-summary-error">Refresh the price and stock check to continue.</p>}
-              <button className="button button-yellow button-full" type="submit" disabled={checkoutBusy || checkoutQuoteLoading || !checkoutQuote || Boolean(checkoutQuoteError) || quoteItems.length === 0}>{checkoutBusy ? "Creating your order…" : "Continue to Payment →"}</button><p className="checkout-secure-note"><span aria-hidden="true">⌑</span> You’ll choose UPI and continue to Razorpay’s secure checkout on the next page.</p><Link className="continue-link" to="/cart">Return to bag</Link>
+              <button className="button button-yellow button-full" type="submit" disabled={checkoutBusy || checkoutQuoteLoading || !checkoutQuote || Boolean(checkoutQuoteError) || quoteItems.length === 0}>{checkoutBusy ? "Creating your order…" : STATIC_PAGES_DEMO ? "Continue to demo payment →" : "Continue to Payment →"}</button><p className="checkout-secure-note"><span aria-hidden="true">⌑</span> {STATIC_PAGES_DEMO ? "The next step simulates payment in this browser. Nothing will be charged." : "You’ll choose UPI and continue to Razorpay’s secure checkout on the next page."}</p><Link className="continue-link" to="/cart">Return to bag</Link>
             </aside>
           </form>}
     </section>;

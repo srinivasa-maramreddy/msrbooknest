@@ -16,7 +16,7 @@ Razorpay's official checkout controls the available UPI intent/QR behavior. MSRB
 4. For webhooks, expose local port 8085 through a trusted HTTPS development tunnel and configure the Razorpay webhook URL as `https://<your-test-tunnel>/api/payments/webhook`. Subscribe to `payment.captured`, `payment.failed`, and `order.paid`; use the same webhook secret in `.env`. Without a reachable webhook URL, authenticated status checks still reconcile payments with Razorpay.
 5. Open `http://localhost:5173`, sign in, add a book, and continue through checkout.
 
-When test credentials are missing, invalid, or not test keys, payment creation stays disabled. The public GitHub Pages demo uses a browser-only adapter and intentionally cannot create orders or payments; it does not pretend a mock payment succeeded.
+When test credentials are missing, invalid, or not test keys, payment creation stays disabled. The public GitHub Pages demo uses a browser-only adapter: it can create an idempotent sample order and lets you simulate success or failure to demonstrate the UI. That simulation never opens Razorpay, contacts a payment provider, or charges money. Use the local Docker stack above for the real Razorpay Test Mode flow.
 
 ## API flow
 
