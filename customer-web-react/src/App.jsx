@@ -442,16 +442,7 @@ function Cover({ book, compact = false }) {
 }
 
 function BrandEmblem() {
-  return <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 66 58" focusable="false">
-    <path d="M7 31c-5 5-3 12 3 17 10 9 34 11 47 2 6-4 8-10 4-16" fill="none" stroke="#754019" strokeLinecap="round" strokeWidth="5" />
-    <path d="M11 37c10 8 28 10 41 3M16 42c8 5 20 6 29 3" fill="none" stroke="#8a4b1d" strokeLinecap="round" strokeWidth="3.3" />
-    <path d="M7 8c8-2.5 16-.4 26 7v22c-9-5.3-18-6.4-26-3.5V8Z" fill="#174b7a" />
-    <path d="M33 15c9-7 17-9.5 26-7v25.5c-9-2.9-18-1.8-26 3.5V15Z" fill="#e78e16" />
-    <path d="M11 13c5-.8 10 .4 16 4.2M55 13c-5-.8-10 .4-16 4.2" fill="none" stroke="#fff8eb" strokeLinecap="round" strokeWidth="2.2" />
-    <path d="M50 39c5-5 9-14 11-24" fill="none" stroke="#4f8a35" strokeLinecap="round" strokeWidth="2.4" />
-    <path d="M57 25c.5-7 4.4-11.5 9-12 .1 6.6-3.2 11.2-9 12Z" fill="#4f8a35" />
-    <path d="M54 33c-4.7-4.8-5.1-10.4-2-14.5 5.2 3.7 6.3 9.2 2 14.5Z" fill="#71a945" />
-  </svg></span>;
+  return <span className="brand-mark" aria-hidden="true"><img className="brand-emblem-image" src={`${import.meta.env.BASE_URL}msrbooknest-logo.png`} alt="" /></span>;
 }
 
 function App() {

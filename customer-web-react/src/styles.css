@@ -734,7 +734,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   width: 52px;
   height: 48px;
   flex: 0 0 52px;
-  overflow: visible;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -744,7 +744,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .nav-drawer-brand .brand-mark, .dialog-top .brand-mark {
   width: 42px;
   height: 39px;
-  overflow: visible;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -754,7 +754,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .footer-brand .brand-mark {
   width: 38px;
   height: 35px;
-  overflow: visible;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -771,6 +771,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (max-width: 440px) {
   .header-brand-group .brand-mark { width: 38px; height: 38px; flex-basis: 38px; }
   .header-brand-group .brand-mark svg { width: 41px; height: 38px; }
+}
+.brand-mark { position: relative; }
+.brand-mark .brand-emblem-image {
+  position: absolute;
+  top: -22%;
+  left: -42%;
+  width: 170%;
+  height: 170%;
+  max-width: none;
+  object-fit: fill;
 }
 .announcement { color: #eaf4ff; background: #153f69; }
 .site-header { background: #fff; border-bottom-color: #e7dac6; box-shadow: 0 8px 24px #163d6210; }
