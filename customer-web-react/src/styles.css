@@ -2128,3 +2128,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .header-actions .wishlist-header { display: none; }
   .header-actions:not(.is-signed-in) .account-action { display: inline-flex; }
 }
+
+/* Normalize mobile header button boxes so each label is centered on the same baseline. */
+@media (max-width: 760px) {
+  .header-actions .wishlist-header,
+  .header-actions .sell-book-action,
+  .header-actions .account-action,
+  .header-actions .sign-out-action,
+  .header-actions .bag-button {
+    box-sizing: border-box;
+    height: 34px;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    vertical-align: middle;
+  }
+  .header-actions .account-action,
+  .header-actions .sign-out-action {
+    padding: 0 12px;
+    font-size: 10px;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
