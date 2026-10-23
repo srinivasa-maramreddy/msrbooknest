@@ -1906,4 +1906,145 @@ body { color: var(--ink); background: var(--paper); }
 .site-footer { color: #f8edda; background: #123553; }
 .footer-brand { color: #fffaf2; }
 .footer-nav a:hover, .footer-nav button:hover { color: #f2bd3c; }
+
+/* Final responsive alignment pass: keep the brand and storefront content on one grid. */
+.announcement,
+.site-header {
+  padding-right: max(8.5vw, 24px);
+  padding-left: max(8.5vw, 24px);
+}
+.site-header {
+  grid-template-columns: minmax(230px, 260px) minmax(0, 1fr) max-content;
+  grid-template-rows: 45px 28px;
+  gap: 5px clamp(16px, 2vw, 28px);
+}
+.header-brand-group {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+.header-brand-group .brand {
+  flex: 0 0 auto;
+  gap: 8px;
+  font-size: clamp(17px, 1.2vw, 20px);
+  letter-spacing: -.05em;
+}
+.header-brand-group .brand > span:last-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.header-search {
+  grid-column: 2;
+  grid-row: 1;
+  width: min(100%, 780px);
+  justify-self: center;
+}
+.header-actions {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: max-content;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: clamp(5px, .65vw, 10px);
+}
+.main-nav {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  flex-wrap: nowrap;
+  justify-content: center;
+}
+.home-hero > *,
+.marketplace-hero > *,
+.section-heading > *,
+.catalog-topline > *,
+.cart-page-layout > *,
+.checkout-review-layout > *,
+.payment-page-layout > *,
+.product-detail-page > * {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) and (min-width: 761px) {
+  .announcement,
+  .site-header {
+    padding-right: clamp(24px, 8.5vw, 92px);
+    padding-left: clamp(24px, 8.5vw, 92px);
+  }
+  .site-header {
+    grid-template-columns: minmax(205px, 225px) minmax(145px, 1fr) max-content;
+    column-gap: 11px;
+  }
+  .header-brand-group .brand { font-size: 16px; }
+  .header-brand-group .brand-mark { width: 43px; height: 42px; flex-basis: 43px; }
+  .header-brand-group .brand-mark svg { width: 46px; height: 42px; }
+  .header-actions { gap: 5px; }
+  .main-nav { gap: clamp(10px, 2vw, 22px); }
+}
+
+@media (max-width: 980px) and (min-width: 761px) {
+  .announcement,
+  .site-header {
+    padding-right: max(24px, 6vw);
+    padding-left: max(24px, 6vw);
+  }
+}
+
+@media (max-width: 760px) {
+  .announcement { padding-right: 14px; padding-left: 14px; }
+  .site-header {
+    min-height: 126px;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-rows: 38px 38px 25px;
+    gap: 6px 9px;
+    padding: 8px 14px 5px;
+  }
+  .header-brand-group { grid-column: 1; grid-row: 1; gap: 7px; }
+  .header-brand-group .brand { gap: 6px; font-size: clamp(14px, 2.2vw, 16px); }
+  .header-brand-group .brand-mark { width: 43px; height: 42px; flex-basis: 43px; }
+  .header-brand-group .brand-mark svg { width: 46px; height: 42px; }
+  .header-search { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+  .header-actions { grid-column: 2; grid-row: 1; min-width: 0; gap: 5px; }
+  .main-nav { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start; overflow-x: auto; }
+  main#top { scroll-margin-top: 126px; }
+  .auth-route-overlay { inset: 126px 0 0; }
+}
+
+@media (max-width: 440px) {
+  .announcement { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 3px 8px; }
+  .header-brand-group { gap: 5px; }
+  .header-brand-group .brand { gap: 5px; font-size: 14px; }
+  .header-brand-group .brand-mark { width: 38px; height: 38px; flex-basis: 38px; }
+  .header-brand-group .brand-mark svg { width: 41px; height: 38px; }
+}
+
+/* Keep wide desktop pages centered instead of stretching card grids across ultrawide screens. */
+@media (min-width: 1700px) {
+  .announcement,
+  .site-header,
+  .marketplace-hero,
+  .promise-strip,
+  .shelf-section,
+  .catalog-section,
+  .orders-section,
+  .reading-note,
+  .site-footer,
+  .buyback-hero,
+  .category-section,
+  .budget-section,
+  .home-category-section,
+  .home-featured-section,
+  .home-sell-banner,
+  .categories-page,
+  .cart-page,
+  .checkout-page,
+  .payment-page,
+  .orders-section.route-content,
+  .product-route-page,
+  .auth-route-page {
+    padding-right: max(24px, calc((100vw - 1600px) / 2));
+    padding-left: max(24px, calc((100vw - 1600px) / 2));
+  }
+}
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline-color: #df8b18; }
