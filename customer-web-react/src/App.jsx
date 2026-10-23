@@ -1613,18 +1613,18 @@ function App() {
 
       <main id="top">
         <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/books" element={<CatalogPage />} />
-          <Route path="/books/:bookId" element={<BookDetailsPage />} />
-          <Route path="/categories" element={<CategoriesPage />} />
-          <Route path="/categories/academic" element={<CatalogPage />} />
-          <Route path="/categories/fiction" element={<CatalogPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/" element={HomePage()} />
+          <Route path="/books" element={CatalogPage()} />
+          <Route path="/books/:bookId" element={BookDetailsPage()} />
+          <Route path="/categories" element={CategoriesPage()} />
+          <Route path="/categories/academic" element={CatalogPage()} />
+          <Route path="/categories/fiction" element={CatalogPage()} />
+          <Route path="/cart" element={CartPage()} />
+          <Route path="/checkout" element={CheckoutPage()} />
           <Route path="/payment/:orderRequestId" element={<PaymentPage token={token} user={user} cartItems={cart} catalogBooks={books} onPaymentSuccess={handlePaymentSuccess} />} />
           <Route path="/login" element={<section className="auth-route-page"><span className="eyebrow">YOUR MSRBOOKNEST ACCOUNT</span><h1>Welcome back to your bookshelf.</h1><p>Sign in to see your orders, keep your bag in sync and manage your used-book submissions.</p></section>} />
           <Route path="/register" element={<section className="auth-route-page"><span className="eyebrow">JOIN THE NEST</span><h1>Make the shelves yours.</h1><p>Create your account to save books and follow your orders.</p></section>} />
-          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/orders" element={OrdersPage()} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/buyback" element={<BuybackDashboard user={user} onSignIn={() => openAuth("login")} onToast={showToast} />} />
           <Route path="/admin" element={isAdmin ? <AdminDashboard /> : <Navigate to="/login" replace />} />
