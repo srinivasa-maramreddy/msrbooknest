@@ -1197,11 +1197,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-details-link { align-self: flex-start; border: 0; margin-top: 8px; padding: 4px 0; color: #df8b18; background: transparent; font-size: 8px; font-weight: 600; }
 .book-details-link:hover { color: #174b7a; text-decoration: underline; }
 .wishlist-heart { width: 34px; height: 34px; position: absolute; z-index: 3; top: 11px; right: 11px; display: grid; place-items: center; border: 1px solid #e9ddca; border-radius: 50%; color: #174b7a; background: #fff; font-size: 18px; box-shadow: 0 3px 9px #17324f13; }
-.wishlist-heart:hover { border-color: #e4bd32; color: #17324f; background: #f8d85f; }
-.wishlist-heart.saved, .wishlist-heart.saved:hover { border-color: #efb4ba; color: #c62838; background: #fff0f2; }
+.wishlist-heart { transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .16s ease; }
+.wishlist-heart:hover, .wishlist-heart:active, .wishlist-heart:focus-visible,
+.wishlist-heart.saved, .wishlist-heart.saved:hover, .wishlist-heart.saved:active {
+  border-color: #efb4ba;
+  color: #c62838;
+  background: #fff0f2;
+}
+.wishlist-heart:active { transform: scale(.94); }
 .wishlist-header.has-saved { color: #c62838; border-color: #efb4ba; }
-.product-detail-actions .wishlist-action-saved { border-color: #efb4ba; color: #c62838; background: #fff0f2; }
-.product-detail-actions .wishlist-action-saved:hover { border-color: #d98c94; color: #a91e2c; background: #ffe4e7; }
+.wishlist-header:hover, .wishlist-header:active, .wishlist-header:focus-visible { color: #c62838; border-color: #efb4ba; background: #fff0f2; }
+.product-detail-actions .wishlist-action:hover,
+.product-detail-actions .wishlist-action:active,
+.product-detail-actions .wishlist-action:focus-visible,
+.product-detail-actions .wishlist-action.is-saved {
+  border-color: #efb4ba;
+  color: #c62838;
+  background: #fff0f2;
+}
 .book-badge { z-index: 2; }
 .catalog-tools { display: grid; grid-template-columns: minmax(240px, 1fr); align-items: start; gap: 12px; }
 .catalog-tools > .search-box { display: none; }
