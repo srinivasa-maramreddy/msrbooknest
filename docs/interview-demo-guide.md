@@ -22,7 +22,7 @@
 
 Inbound shipping is customer-paid. In the demo policy, failed-inspection returns cost ₹120 and are store-paid unless a dispute decision explicitly assigns the fee to the customer.
 
-Use the registration screen if asked about OTP. The local demo shows its email OTP code in the UI; real delivery can be enabled with SMTP. Mobile numbers are stored for sign-in, with no SMS OTP integration.
+Use the registration screen if asked about OTP. The hosted flow sends a one-time code through the Gmail API over HTTPS; local registration can use the `.env.otp` configuration. Codes expire, are hashed in storage, and are never returned to the storefront. Mobile numbers are stored for sign-in, with no SMS OTP integration.
 
 ## Explain checkout on a whiteboard
 

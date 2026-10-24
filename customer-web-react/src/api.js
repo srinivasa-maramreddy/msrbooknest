@@ -51,7 +51,6 @@ const springApi = {
   login: (payload) => request(API.auth, "/api/auth/login", json("POST", payload)),
   startPasswordRecovery: (payload) => request(API.auth, "/api/auth/password/forgot", json("POST", payload)),
   resetPassword: (payload) => request(API.auth, "/api/auth/password/reset", json("POST", payload)),
-  registerDemo: (payload) => request(API.auth, "/api/auth/demo/register", json("POST", payload)),
   startRegistration: (payload) => request(API.auth, "/api/auth/register/start", json("POST", payload)),
   sendRegistrationEmailOtp: (payload) => request(API.auth, "/api/auth/register/email/send-otp", json("POST", payload)),
   completeOtpRegistration: (payload) => request(API.auth, "/api/auth/register/complete", json("POST", payload)),

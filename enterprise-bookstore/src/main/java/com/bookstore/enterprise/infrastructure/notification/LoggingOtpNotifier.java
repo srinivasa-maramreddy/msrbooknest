@@ -34,8 +34,7 @@ public class LoggingOtpNotifier implements OtpNotifier {
     private void sendEmailOtp(String destination, String otpCode) {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         if (!otpProperties.isEmailEnabled() || mailSender == null) {
-            log.info("OTP sent channel=EMAIL destination={} otp={}", destination, otpCode);
-            return;
+            throw new IllegalStateException("Email OTP delivery is not configured; refusing to expose a verification code.");
         }
 
         try {
@@ -46,10 +45,17 @@ public class LoggingOtpNotifier implements OtpNotifier {
             message.setText("Your OTP code is " + otpCode + ". It expires in "
                     + otpProperties.getExpirationMinutes() + " minutes.");
             mailSender.send(message);
-            log.info("OTP email delivered destination={}", destination);
+            log.info("OTP email delivered destination={}", maskEmail(destination));
         } catch (Exception ex) {
-            log.error("Failed to send OTP email. Falling back to log destination={} reason={}", destination, ex.getMessage());
-            log.info("OTP sent channel=EMAIL destination={} otp={}", destination, otpCode);
+            log.error("OTP email delivery failed errorType={}", ex.getClass().getSimpleName());
+            throw new IllegalStateException("Could not send the email code. Check the email configuration and try again.");
         }
+    }
+
+    private String maskEmail(String email) {
+        if (email == null) return "unknown";
+        int at = email.indexOf('@');
+        if (at < 1) return "***";
+        return email.charAt(0) + "***" + email.substring(at);
     }
 }

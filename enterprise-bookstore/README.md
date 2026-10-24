@@ -71,12 +71,7 @@ If OTP expires, call:
 
 ### Optional real email delivery
 
-By default, OTP is logged in backend logs.  
-To send real email OTP, set:
-
-- `APP_OTP_EMAIL_ENABLED=true`
-- `APP_OTP_MAIL_FROM=<your-email>`
-- `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`
+This legacy module is not part of the hosted deployment and its OTP notifier does not print codes to logs. Use the root `auth-service` for the active email-only OTP implementation. See `docs/no-card-deployment.md` for its Gmail API configuration.
 
 ## 5) Admin Registration
 

@@ -23,18 +23,6 @@ public class RegistrationSession {
     @Column(nullable = false, length = 20)
     private String phoneNumber;
 
-    // Legacy database columns retained for existing auth_db schemas; registration no longer uses phone OTP.
-    @Column(length = 255)
-    private String phoneOtpHash;
-
-    private LocalDateTime phoneOtpExpiresAt;
-
-    @Column(nullable = false)
-    private int phoneOtpAttempts;
-
-    @Column(nullable = false)
-    private boolean phoneVerified;
-
     @Column(length = 255)
     private String email;
 
@@ -42,6 +30,8 @@ public class RegistrationSession {
     private String emailOtpHash;
 
     private LocalDateTime emailOtpExpiresAt;
+
+    private LocalDateTime emailOtpSentAt;
 
     @Column(nullable = false)
     private int emailOtpAttempts;
@@ -79,20 +69,14 @@ public class RegistrationSession {
     public void setName(String name) { this.name = name; }
     public String getPhoneNumber() { return phoneNumber; }
     public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
-    public String getPhoneOtpHash() { return phoneOtpHash; }
-    public void setPhoneOtpHash(String phoneOtpHash) { this.phoneOtpHash = phoneOtpHash; }
-    public LocalDateTime getPhoneOtpExpiresAt() { return phoneOtpExpiresAt; }
-    public void setPhoneOtpExpiresAt(LocalDateTime phoneOtpExpiresAt) { this.phoneOtpExpiresAt = phoneOtpExpiresAt; }
-    public int getPhoneOtpAttempts() { return phoneOtpAttempts; }
-    public void setPhoneOtpAttempts(int phoneOtpAttempts) { this.phoneOtpAttempts = phoneOtpAttempts; }
-    public boolean isPhoneVerified() { return phoneVerified; }
-    public void setPhoneVerified(boolean phoneVerified) { this.phoneVerified = phoneVerified; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     public String getEmailOtpHash() { return emailOtpHash; }
     public void setEmailOtpHash(String emailOtpHash) { this.emailOtpHash = emailOtpHash; }
     public LocalDateTime getEmailOtpExpiresAt() { return emailOtpExpiresAt; }
     public void setEmailOtpExpiresAt(LocalDateTime emailOtpExpiresAt) { this.emailOtpExpiresAt = emailOtpExpiresAt; }
+    public LocalDateTime getEmailOtpSentAt() { return emailOtpSentAt; }
+    public void setEmailOtpSentAt(LocalDateTime emailOtpSentAt) { this.emailOtpSentAt = emailOtpSentAt; }
     public int getEmailOtpAttempts() { return emailOtpAttempts; }
     public void setEmailOtpAttempts(int emailOtpAttempts) { this.emailOtpAttempts = emailOtpAttempts; }
     public boolean isEmailVerified() { return emailVerified; }

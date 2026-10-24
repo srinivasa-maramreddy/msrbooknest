@@ -50,9 +50,9 @@ Copy the `https://<random-name>.trycloudflare.com` URL from the log. Confirm its
 
 ## 4. Connect GitHub Pages to the backend
 
-In GitHub, open **srinivasa-maramreddy/msrbooknest → Settings → Secrets and variables → Actions → Variables**, then create a repository variable named `VITE_BACKEND_BASE_URL` with the copied HTTPS URL (no trailing slash). This value is public frontend configuration, not a password.
+The GitHub Pages workflow defaults to the Render API gateway. To point the site at a different public gateway, open **srinivasa-maramreddy/msrbooknest → Settings → Secrets and variables → Actions → Variables**, then create a repository variable named `VITE_BACKEND_BASE_URL` with the copied HTTPS URL (no trailing slash). This value is public frontend configuration, not a password.
 
-Open **Actions → Deploy msrbooknest to GitHub Pages → Run workflow**. The workflow will rebuild the site in Spring API mode when this variable is set. If the variable is empty, the Pages site continues to use the browser-only demo.
+Open **Actions → Deploy msrbooknest to GitHub Pages → Run workflow** to rebuild the site against the configured Spring API. The Pages build no longer falls back to browser-only authentication.
 
 The API gateway URL changes when the Quick Tunnel is recreated. If that happens, copy the new URL, update `VITE_BACKEND_BASE_URL`, and rerun the Pages workflow. For a stable hostname, use a named Cloudflare Tunnel and a domain you control; a domain may have a registration cost.
 

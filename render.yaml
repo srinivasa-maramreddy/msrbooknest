@@ -28,11 +28,19 @@ services:
       - key: APP_WEB_ORIGINS
         value: https://srinivasa-maramreddy.github.io
       - key: APP_DEMO_SEED_USERS
-        value: "true"
-      - key: APP_OTP_DEV_SHOW_CODES
-        value: "true"
-      - key: APP_EMAIL_OTP_ENABLED
         value: "false"
+      - key: APP_EMAIL_OTP_ENABLED
+        value: "true"
+      - key: GMAIL_SENDER_EMAIL
+        sync: false
+      - key: GMAIL_OAUTH_CLIENT_ID
+        sync: false
+      - key: GMAIL_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_OAUTH_REFRESH_TOKEN
+        sync: false
+      - key: APP_EMAIL_OTP_SUBJECT_PREFIX
+        value: MSRBookNest
       - key: APP_HEALTH_MAIL_ENABLED
         value: "false"
       - key: SPRING_JPA_SHOW_SQL

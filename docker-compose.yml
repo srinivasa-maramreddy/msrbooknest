@@ -52,7 +52,6 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root123
       APP_JWT_SECRET: ${APP_JWT_SECRET:-msrbooknest-demo-signing-key-change-me}
-      APP_OTP_DEV_SHOW_CODES: "true"
       APP_EMAIL_OTP_ENABLED: "false"
       APP_HEALTH_MAIL_ENABLED: "false"
       APP_DEMO_SEED_USERS: "true"

@@ -1,7 +1,6 @@
 package com.bookstore.auth.controller;
 
 import com.bookstore.auth.dto.AuthResponse;
-import com.bookstore.auth.dto.DemoRegisterRequest;
 import com.bookstore.auth.dto.LoginRequest;
 import com.bookstore.auth.dto.PasswordForgotRequest;
 import com.bookstore.auth.dto.PasswordRecoveryResponse;
@@ -17,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "${app.web.origins:http://localhost:5173}")
 @RestController
 @RequestMapping({"/api/auth", "/auth"})
 public class AuthController {
@@ -86,12 +85,4 @@ public class AuthController {
         }
     }
 
-    @PostMapping("/demo/register")
-    public ResponseEntity<?> registerDemo(@Valid @RequestBody DemoRegisterRequest request) {
-        try {
-            return ResponseEntity.ok(authService.registerDemo(request));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
-        }
-    }
 }

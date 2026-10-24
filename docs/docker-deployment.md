@@ -37,7 +37,7 @@ Seeded admin account (catalog/order admin APIs):
 - Email: `admin@msrbooknest.demo`
 - Password: `AdminDemo@123`
 
-The UI lets you register with email OTP verification. Mobile numbers are collected for account sign-in but are not verified by SMS. In this local Compose configuration, the email code is displayed in the UI for the demo; no email is sent. Passwords must be at least 10 characters and include a special character.
+The UI lets you register with email OTP verification. Mobile numbers are collected for account sign-in but are not verified by SMS. The default local stack does not expose or display OTP codes; configure the Gmail API override below to register a new account. Passwords must be at least 10 characters and include a special character.
 
 ## Used-book buyback walkthrough
 
@@ -74,13 +74,13 @@ This stops containers and keeps the named MySQL and Kafka volumes. `docker compo
 
 ## Optional email delivery
 
-For the interviewer demo, keep the local OTP display enabled. To try real email delivery, copy [.env.otp.example](../.env.otp.example) to the ignored `.env.otp` file and add valid SMTP credentials. Then run:
+To enable real email delivery locally, copy [.env.otp.example](../.env.otp.example) to the ignored `.env.otp` file, replace the example values with Google OAuth credentials for a Gmail account, then run:
 
 ```bash
 docker compose --env-file .env.otp -f docker-compose.yml -f docker-compose.otp.yml up -d --build
 ```
 
-The override enables email OTP delivery and hides development codes. Compose passes no email credentials to Auth in the default demo stack. Never commit provider credentials. If the email provider is missing or fails, registration returns a delivery error and OTPs are never written to logs. To return to demo behavior, run `docker compose up -d` with the base Compose file so all services share the base configuration again.
+The override enables email OTP delivery. The Auth service sends through the Gmail API over HTTPS, caches short-lived access tokens, and never writes OTPs or OAuth tokens to logs. Never commit `.env.otp` or share its values. If OAuth is missing or Gmail rejects the request, registration returns a delivery error. The local stack can still use seeded accounts without email delivery.
 
 ## Deployment boundary
 

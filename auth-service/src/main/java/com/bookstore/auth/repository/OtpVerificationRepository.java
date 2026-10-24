@@ -5,6 +5,7 @@ import com.bookstore.auth.entity.OtpPurpose;
 import com.bookstore.auth.entity.VerificationChannel;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface OtpVerificationRepository extends JpaRepository<OtpVerification, Long> {
@@ -19,6 +20,20 @@ public interface OtpVerificationRepository extends JpaRepository<OtpVerification
             OtpPurpose purpose,
             VerificationChannel channel,
             String destination
+    );
+
+    long countByPurposeAndChannelAndDestinationAndCreatedAtAfter(
+            OtpPurpose purpose,
+            VerificationChannel channel,
+            String destination,
+            LocalDateTime createdAt
+    );
+
+    void deleteByPurposeAndChannelAndDestinationAndCreatedAtBefore(
+            OtpPurpose purpose,
+            VerificationChannel channel,
+            String destination,
+            LocalDateTime createdAt
     );
 
     boolean existsByUser_IdAndPurposeAndChannelAndVerifiedTrue(

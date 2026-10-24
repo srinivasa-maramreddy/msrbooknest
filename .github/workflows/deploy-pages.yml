@@ -48,8 +48,8 @@ jobs:
         working-directory: customer-web-react
         env:
           VITE_BASE_PATH: /msrbooknest/
-          VITE_BACKEND_BASE_URL: ${{ vars.VITE_BACKEND_BASE_URL }}
-          VITE_DEMO_MODE: ${{ vars.VITE_BACKEND_BASE_URL == '' && 'true' || 'false' }}
+          VITE_BACKEND_BASE_URL: ${{ vars.VITE_BACKEND_BASE_URL || 'https://msrbooknest-srinivas-api.onrender.com' }}
+          VITE_DEMO_MODE: "false"
           VITE_MOCK_NPCI: "true"
         run: pnpm build
 

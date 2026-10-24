@@ -19,14 +19,14 @@ For a guided interview walkthrough, seeded account details, API links, troublesh
 
 ## Public browser demo
 
-The React storefront is published with GitHub Pages at <https://srinivasa-maramreddy.github.io/msrbooknest/>. By default it uses a browser-only mock adapter, so sample catalog, cart, checkout, account, and used-book buyback actions are saved in that browser. To connect it to the real Spring APIs, set the GitHub Actions repository variable `VITE_BACKEND_BASE_URL` to the public HTTPS API gateway URL and rerun the Pages workflow. For a no-card demo deployment, see [the Render and Aiven guide](docs/no-card-deployment.md). The [Oracle Always Free guide](docs/oracle-free-deployment.md) remains available for a VM deployment, and local Docker Compose remains available for development.
+The React storefront is published with GitHub Pages at <https://srinivasa-maramreddy.github.io/msrbooknest/> and connects to the Spring API gateway by default. Account registration and password recovery use real email codes sent through the Gmail API; configure the Auth service's Google OAuth environment variables before enabling those flows. For Render and Aiven setup, see [the hosted deployment guide](docs/no-card-deployment.md). The [Oracle Always Free guide](docs/oracle-free-deployment.md) remains available for a VM deployment, and local Docker Compose remains available for development.
 
-Demo sign-in:
+Seeded sign-in for the local Docker demo only:
 
 - Customer: `reader@msrbooknest.demo` / `ReaderDemo@123`
 - Admin: `admin@msrbooknest.demo` / `AdminDemo@123`
 
-The Pages deployment runs automatically when the storefront or its workflow changes on `main`. Without `VITE_BACKEND_BASE_URL`, it continues to publish the browser-only demo.
+The Pages deployment runs automatically when the storefront or its workflow changes on `main`. Its workflow uses the Render API gateway unless a repository variable overrides that URL. The hosted build does not use the browser-only account or OTP demo.
 
 ## What the demo shows
 
@@ -70,4 +70,4 @@ The Order service checks the signed-in customer's cart, gets authoritative price
 
 ## Demo security note
 
-Compose defaults, local demo accounts, OTP display, database credentials, and the JWT signing key are for a laptop demo only. Do not expose this stack publicly with its defaults. Replace demo secrets, configure real email delivery, add a managed identity/key strategy, and integrate a certified payment provider before any production deployment. OTP verification uses email only; mobile numbers remain available for account sign-in.
+Local Compose database credentials, local seeded accounts, and the JWT signing key are for a laptop demo only. Do not expose the local stack publicly with its defaults. Hosted OTPs are random, stored as password hashes, expire after 10 minutes, allow at most five verification attempts, and are sent through Gmail's HTTPS API. SMS is not used. This portfolio deployment still uses free shared hosting and a mock NPCI payment flow; complete a security and reliability review before using it for real customers.

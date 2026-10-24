@@ -5,20 +5,17 @@ public class RegistrationStepResponse {
     private String registrationId;
     private String maskedPhone;
     private String maskedEmail;
-    private String debugEmailOtp;
 
     public RegistrationStepResponse(
             String message,
             String registrationId,
             String maskedPhone,
-            String maskedEmail,
-            String debugEmailOtp
+            String maskedEmail
     ) {
         this.message = message;
         this.registrationId = registrationId;
         this.maskedPhone = maskedPhone;
         this.maskedEmail = maskedEmail;
-        this.debugEmailOtp = debugEmailOtp;
     }
 
     public String getMessage() {
@@ -35,9 +32,5 @@ public class RegistrationStepResponse {
 
     public String getMaskedEmail() {
         return maskedEmail;
-    }
-
-    public String getDebugEmailOtp() {
-        return debugEmailOtp;
     }
 }

@@ -1,7 +1,6 @@
 package com.bookstore.auth.service;
 
 import com.bookstore.auth.dto.AuthResponse;
-import com.bookstore.auth.dto.DemoRegisterRequest;
 import com.bookstore.auth.dto.LoginRequest;
 import com.bookstore.auth.dto.PasswordForgotRequest;
 import com.bookstore.auth.dto.PasswordRecoveryResponse;
@@ -20,24 +19,24 @@ import com.bookstore.auth.repository.OtpVerificationRepository;
 import com.bookstore.auth.repository.RegistrationSessionRepository;
 import com.bookstore.auth.repository.UserRepository;
 import com.bookstore.auth.security.JwtService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Locale;
-import java.util.concurrent.ThreadLocalRandom;
+import java.security.SecureRandom;
 import java.util.regex.Pattern;
 
 @Service
 @Transactional
 public class AuthService {
-    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+    private static final SecureRandom OTP_RANDOM = new SecureRandom();
     private static final int OTP_EXPIRY_MINUTES = 10;
     private static final int OTP_MAX_ATTEMPTS = 5;
+    private static final int OTP_RESEND_COOLDOWN_SECONDS = 60;
+    private static final int OTP_MAX_SENDS_PER_HOUR = 5;
+    private static final int REGISTRATION_SESSION_RETENTION_HOURS = 24;
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     private static final Pattern INDIAN_MOBILE_PATTERN = Pattern.compile("^[6-9]\\d{9}$");
 
@@ -47,12 +46,6 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final EmailOtpService emailOtpService;
-
-    @Value("${app.otp.dev.show-codes:true}")
-    private boolean showDevOtps;
-
-    @Value("${app.demo.allow-registration:true}")
-    private boolean demoRegistrationEnabled;
 
     public AuthService(
             UserRepository userRepository,
@@ -86,7 +79,8 @@ public class AuthService {
             throw new RuntimeException("Phone number already exists");
         }
 
-        registrationSessionRepository.deleteByPhoneNumberAndCompletedFalse(phoneNumber);
+        registrationSessionRepository.deleteByCreatedAtBeforeAndCompletedFalse(
+                LocalDateTime.now().minusHours(REGISTRATION_SESSION_RETENTION_HOURS));
 
         RegistrationSession session = new RegistrationSession();
         session.setName(name);
@@ -99,11 +93,11 @@ public class AuthService {
                 "Details saved. Verify your email to continue.",
                 session.getId(),
                 maskDestination(phoneNumber, true),
-                null,
                 null
         );
     }
 
+    @Transactional(noRollbackFor = IllegalStateException.class)
     public RegistrationStepResponse sendEmailRegistrationOtp(RegisterEmailOtpRequest request) {
         RegistrationSession session = findActiveSession(request.getRegistrationId());
 
@@ -117,29 +111,36 @@ public class AuthService {
             throw new RuntimeException("Email already exists");
         }
 
+        LocalDateTime now = LocalDateTime.now();
+        if (registrationSessionRepository.existsByEmailAndEmailOtpSentAtAfter(
+                email, now.minusSeconds(OTP_RESEND_COOLDOWN_SECONDS))) {
+            throw new RuntimeException("Please wait one minute before requesting another email code.");
+        }
+        if (registrationSessionRepository.countByEmailAndEmailOtpSentAtAfter(email, now.minusHours(1))
+                >= OTP_MAX_SENDS_PER_HOUR) {
+            throw new RuntimeException("Too many email code requests. Try again later.");
+        }
+
         String otpCode = generateOtpCode();
         session.setEmail(email);
         session.setEmailOtpHash(passwordEncoder.encode(otpCode));
-        session.setEmailOtpExpiresAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
+        session.setEmailOtpExpiresAt(now.plusMinutes(OTP_EXPIRY_MINUTES));
+        session.setEmailOtpSentAt(now);
         session.setEmailOtpAttempts(0);
         session.setEmailVerified(false);
 
         registrationSessionRepository.save(session);
-        if (showDevOtps) {
-            log.info("Dev OTP mode active. Skipping email gateway for {}", email);
-        } else {
-            emailOtpService.sendOtp(email, otpCode, OtpPurpose.REGISTRATION);
-        }
+        emailOtpService.sendOtp(email, otpCode, OtpPurpose.REGISTRATION);
 
         return new RegistrationStepResponse(
-                "Email OTP sent.",
+                "A verification code was sent to your email.",
                 session.getId(),
                 maskDestination(session.getPhoneNumber(), true),
-                maskDestination(email, false),
-                showDevOtps ? otpCode : null
+                maskDestination(email, false)
         );
     }
 
+    @Transactional(noRollbackFor = InvalidOtpException.class)
     public AuthResponse completeRegistration(RegisterCompleteRequest request) {
         RegistrationSession session = findActiveSession(request.getRegistrationId());
 
@@ -170,8 +171,8 @@ public class AuthService {
             throw new RuntimeException("Password and confirm password must match");
         }
 
-        if (request.getPassword().length() < 6) {
-            throw new RuntimeException("Password must be at least 6 characters");
+        if (request.getPassword().length() < 10 || request.getPassword().matches("[A-Za-z0-9]*")) {
+            throw new RuntimeException("Password must be at least 10 characters and include a special character");
         }
 
         verifyEmailOtp(session, request.getEmailOtpCode());
@@ -216,22 +217,33 @@ public class AuthService {
         return new AuthResponse(token, loginId, user.getRole().name());
     }
 
+    @Transactional(noRollbackFor = IllegalStateException.class)
     public PasswordRecoveryResponse startPasswordRecovery(PasswordForgotRequest request) {
-        final String genericMessage = "If an account matches those details, a verification code has been sent to its registered email.";
+        final String genericMessage = "If an account matches those details, a code has been sent or a recent request is still active.";
         User user;
         try {
             user = findUserByIdentifier(request.getIdentifier());
         } catch (RuntimeException ignored) {
-            return new PasswordRecoveryResponse(genericMessage, null, null);
+            return new PasswordRecoveryResponse(genericMessage, null);
         }
 
         if (!user.isEnabled() || user.getEmail() == null || user.getEmail().isBlank()) {
-            return new PasswordRecoveryResponse(genericMessage, null, null);
+            return new PasswordRecoveryResponse(genericMessage, null);
         }
 
         String email = normalizeEmail(user.getEmail());
-        otpVerificationRepository.deleteByPurposeAndChannelAndDestinationAndVerifiedFalse(
-                OtpPurpose.PASSWORD_RESET, VerificationChannel.EMAIL, email);
+        LocalDateTime now = LocalDateTime.now();
+        long recentRequests = otpVerificationRepository.countByPurposeAndChannelAndDestinationAndCreatedAtAfter(
+                OtpPurpose.PASSWORD_RESET, VerificationChannel.EMAIL, email, now.minusHours(1));
+        boolean sentRecently = otpVerificationRepository.countByPurposeAndChannelAndDestinationAndCreatedAtAfter(
+                OtpPurpose.PASSWORD_RESET, VerificationChannel.EMAIL, email,
+                now.minusSeconds(OTP_RESEND_COOLDOWN_SECONDS)) > 0;
+        if (recentRequests >= OTP_MAX_SENDS_PER_HOUR || sentRecently) {
+            return new PasswordRecoveryResponse(genericMessage, null);
+        }
+
+        otpVerificationRepository.deleteByPurposeAndChannelAndDestinationAndCreatedAtBefore(
+                OtpPurpose.PASSWORD_RESET, VerificationChannel.EMAIL, email, now.minusHours(24));
 
         String otpCode = generateOtpCode();
         OtpVerification verification = new OtpVerification();
@@ -240,18 +252,14 @@ public class AuthService {
         verification.setPurpose(OtpPurpose.PASSWORD_RESET);
         verification.setDestination(email);
         verification.setOtpHash(passwordEncoder.encode(otpCode));
-        verification.setExpiresAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
+        verification.setExpiresAt(now.plusMinutes(OTP_EXPIRY_MINUTES));
         verification.setVerified(false);
         verification.setAttempts(0);
         otpVerificationRepository.save(verification);
 
-        if (showDevOtps) {
-            log.info("Dev password recovery code generated for account {}", maskDestination(email, false));
-        } else {
-            emailOtpService.sendOtp(email, otpCode, OtpPurpose.PASSWORD_RESET);
-        }
+        emailOtpService.sendOtp(email, otpCode, OtpPurpose.PASSWORD_RESET);
 
-        return new PasswordRecoveryResponse(genericMessage, maskDestination(email, false), showDevOtps ? otpCode : null);
+        return new PasswordRecoveryResponse(genericMessage, null);
     }
 
     @Transactional(noRollbackFor = RuntimeException.class)
@@ -292,30 +300,6 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    public AuthResponse registerDemo(DemoRegisterRequest request) {
-        if (!demoRegistrationEnabled) {
-            throw new IllegalStateException("Demo registration is disabled");
-        }
-        String email = normalizeEmail(request.getEmail());
-        String phone = normalizePhone(request.getPhoneNumber());
-        if (userRepository.existsByEmail(email)) throw new RuntimeException("Email already exists");
-        if (userRepository.existsByPhoneNumber(phone)) throw new RuntimeException("Phone number already exists");
-        if (request.getPassword() == null || request.getPassword().length() < 10
-                || request.getPassword().matches("[A-Za-z0-9]*")) {
-            throw new RuntimeException("Password must be at least 10 characters and include a special character");
-        }
-
-        User user = new User();
-        user.setName(request.getName().trim());
-        user.setEmail(email);
-        user.setPhoneNumber(phone);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole(Role.CUSTOMER);
-        user.setEnabled(true);
-        userRepository.save(user);
-        return new AuthResponse(jwtService.generateToken(user.getEmail(), user.getRole().name()), user.getEmail(), user.getRole().name());
-    }
-
     private RegistrationSession findActiveSession(String registrationId) {
         if (registrationId == null || registrationId.isBlank()) {
             throw new RuntimeException("registrationId is required");
@@ -327,28 +311,36 @@ public class AuthService {
         if (session.isCompleted()) {
             throw new RuntimeException("Registration session already completed");
         }
+        if (session.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(30))) {
+            throw new RuntimeException("This registration has expired. Start again to receive a new email code.");
+        }
 
         return session;
     }
 
     private void verifyEmailOtp(RegistrationSession session, String otpCode) {
         if (session.getEmailOtpHash() == null || session.getEmailOtpExpiresAt() == null) {
-            throw new RuntimeException("Email OTP not requested");
+            throw new InvalidOtpException("Email OTP not requested");
         }
 
         if (session.getEmailOtpExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Email OTP expired. Request a new OTP.");
+            throw new InvalidOtpException("Email OTP expired. Request a new OTP.");
         }
 
         if (session.getEmailOtpAttempts() >= OTP_MAX_ATTEMPTS) {
-            throw new RuntimeException("Maximum email OTP attempts exceeded");
+            throw new InvalidOtpException("Maximum email OTP attempts exceeded. Request a new code.");
         }
 
-        if (!passwordEncoder.matches(otpCode, session.getEmailOtpHash())) {
+        if (otpCode == null || !passwordEncoder.matches(otpCode, session.getEmailOtpHash())) {
             session.setEmailOtpAttempts(session.getEmailOtpAttempts() + 1);
             registrationSessionRepository.save(session);
-            throw new RuntimeException("Invalid email OTP");
+            throw new InvalidOtpException("Invalid email code. Check it and try again.");
         }
+
+        session.setEmailOtpHash(null);
+        session.setEmailOtpExpiresAt(null);
+        session.setEmailVerified(true);
+        registrationSessionRepository.save(session);
     }
 
     private User findUserByIdentifier(String rawIdentifier) {
@@ -454,7 +446,13 @@ public class AuthService {
     }
 
     private String generateOtpCode() {
-        int otp = ThreadLocalRandom.current().nextInt(0, 1_000_000);
+        int otp = OTP_RANDOM.nextInt(1_000_000);
         return String.format("%06d", otp);
+    }
+
+    private static class InvalidOtpException extends RuntimeException {
+        private InvalidOtpException(String message) {
+            super(message);
+        }
     }
 }
