@@ -4,5 +4,7 @@
 **/node_modules
 **/dist
 **/.env.local
+/.env*
+**/.env*
 **/coverage
 .DS_Store

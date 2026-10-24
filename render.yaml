@@ -1,0 +1,392 @@
+services:
+  - type: web
+    name: msrbooknest-srinivas-auth
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile.service
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SERVICE
+        value: auth-service
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        sync: false
+      - key: MYSQL_USERNAME
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        value: auth_db
+      - key: MYSQL_SSL_MODE
+        value: REQUIRED
+      - key: APP_JWT_SECRET
+        generateValue: true
+      - key: APP_WEB_ORIGINS
+        value: https://srinivasa-maramreddy.github.io
+      - key: APP_DEMO_SEED_USERS
+        value: "true"
+      - key: APP_OTP_DEV_SHOW_CODES
+        value: "true"
+      - key: APP_EMAIL_OTP_ENABLED
+        value: "false"
+      - key: APP_SMS_MSG91_ENABLED
+        value: "false"
+      - key: APP_HEALTH_MAIL_ENABLED
+        value: "false"
+      - key: SPRING_JPA_SHOW_SQL
+        value: "false"
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC
+
+  - type: web
+    name: msrbooknest-srinivas-catalog
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile.service
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SERVICE
+        value: catalog-service
+      - key: MYSQL_HOST
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_HOST
+      - key: MYSQL_PORT
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PORT
+      - key: MYSQL_USERNAME
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_USERNAME
+      - key: MYSQL_PASSWORD
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PASSWORD
+      - key: MYSQL_DATABASE
+        value: catalog_db
+      - key: MYSQL_SSL_MODE
+        value: REQUIRED
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_USERNAME
+        sync: false
+      - key: KAFKA_PASSWORD
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: APP_JWT_SECRET
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: APP_JWT_SECRET
+      - key: APP_WEB_ORIGINS
+        value: https://srinivasa-maramreddy.github.io
+      - key: ORDER_SERVICE_BASE_URL
+        value: https://msrbooknest-srinivas-orders.onrender.com
+      - key: SPRING_JPA_SHOW_SQL
+        value: "false"
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC
+
+  - type: web
+    name: msrbooknest-srinivas-cart
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile.service
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SERVICE
+        value: cart-service
+      - key: MYSQL_HOST
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_HOST
+      - key: MYSQL_PORT
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PORT
+      - key: MYSQL_USERNAME
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_USERNAME
+      - key: MYSQL_PASSWORD
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PASSWORD
+      - key: MYSQL_DATABASE
+        value: cart_db
+      - key: MYSQL_SSL_MODE
+        value: REQUIRED
+      - key: APP_JWT_SECRET
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: APP_JWT_SECRET
+      - key: APP_WEB_ORIGINS
+        value: https://srinivasa-maramreddy.github.io
+      - key: CATALOG_SERVICE_BASE_URL
+        value: https://msrbooknest-srinivas-catalog.onrender.com
+      - key: SPRING_JPA_SHOW_SQL
+        value: "false"
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC
+
+  - type: web
+    name: msrbooknest-srinivas-orders
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile.service
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SERVICE
+        value: order-service
+      - key: MYSQL_HOST
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_HOST
+      - key: MYSQL_PORT
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PORT
+      - key: MYSQL_USERNAME
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_USERNAME
+      - key: MYSQL_PASSWORD
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PASSWORD
+      - key: MYSQL_DATABASE
+        value: order_db
+      - key: MYSQL_SSL_MODE
+        value: REQUIRED
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-catalog
+          envVarKey: KAFKA_BOOTSTRAP_SERVERS
+      - key: KAFKA_USERNAME
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-catalog
+          envVarKey: KAFKA_USERNAME
+      - key: KAFKA_PASSWORD
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-catalog
+          envVarKey: KAFKA_PASSWORD
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: APP_JWT_SECRET
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: APP_JWT_SECRET
+      - key: APP_WEB_ORIGINS
+        value: https://srinivasa-maramreddy.github.io
+      - key: CATALOG_SERVICE_BASE_URL
+        value: https://msrbooknest-srinivas-catalog.onrender.com
+      - key: CART_SERVICE_BASE_URL
+        value: https://msrbooknest-srinivas-cart.onrender.com
+      - key: SPRING_JPA_SHOW_SQL
+        value: "false"
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC
+
+  - type: web
+    name: msrbooknest-srinivas-payments
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile.service
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SERVICE
+        value: payment-service
+      - key: MYSQL_HOST
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_HOST
+      - key: MYSQL_PORT
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PORT
+      - key: MYSQL_USERNAME
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_USERNAME
+      - key: MYSQL_PASSWORD
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PASSWORD
+      - key: MYSQL_DATABASE
+        value: payment_db
+      - key: MYSQL_SSL_MODE
+        value: REQUIRED
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-catalog
+          envVarKey: KAFKA_BOOTSTRAP_SERVERS
+      - key: KAFKA_USERNAME
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-catalog
+          envVarKey: KAFKA_USERNAME
+      - key: KAFKA_PASSWORD
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-catalog
+          envVarKey: KAFKA_PASSWORD
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_TOPIC_PARTITIONS
+        value: "2"
+      - key: APP_JWT_SECRET
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: APP_JWT_SECRET
+      - key: APP_WEB_ORIGINS
+        value: https://srinivasa-maramreddy.github.io
+      - key: ORDER_SERVICE_BASE_URL
+        value: https://msrbooknest-srinivas-orders.onrender.com
+      - key: SPRING_JPA_SHOW_SQL
+        value: "false"
+      - key: RAZORPAY_ENABLED
+        value: "false"
+      - key: RAZORPAY_ALLOW_LIVE
+        value: "false"
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC
+
+  - type: web
+    name: msrbooknest-srinivas-buyback
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile.service
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SERVICE
+        value: buyback-service
+      - key: MYSQL_HOST
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_HOST
+      - key: MYSQL_PORT
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PORT
+      - key: MYSQL_USERNAME
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_USERNAME
+      - key: MYSQL_PASSWORD
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: MYSQL_PASSWORD
+      - key: MYSQL_DATABASE
+        value: buyback_db
+      - key: MYSQL_SSL_MODE
+        value: REQUIRED
+      - key: APP_JWT_SECRET
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: APP_JWT_SECRET
+      - key: APP_WEB_ORIGINS
+        value: https://srinivasa-maramreddy.github.io
+      - key: APP_KAFKA_BUYBACK_EVENTS_ENABLED
+        value: "false"
+      - key: SPRING_KAFKA_ADMIN_AUTO_CREATE
+        value: "false"
+      - key: SPRING_JPA_SHOW_SQL
+        value: "false"
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC
+
+  - type: web
+    name: msrbooknest-srinivas-api
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./infra/render/gateway.Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: AUTH_SERVICE_URL
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-auth
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: CATALOG_SERVICE_URL
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-catalog
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: CART_SERVICE_URL
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-cart
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: ORDER_SERVICE_URL
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-orders
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: PAYMENT_SERVICE_URL
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-payments
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: BUYBACK_SERVICE_URL
+        fromService:
+          type: web
+          name: msrbooknest-srinivas-buyback
+          envVarKey: RENDER_EXTERNAL_URL

@@ -1,0 +1,80 @@
+server {
+    listen ${PORT};
+    server_name _;
+    client_max_body_size 4m;
+
+    resolver 1.1.1.1 8.8.8.8 valid=60s ipv6=off;
+    resolver_timeout 10s;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_ssl_server_name on;
+    proxy_connect_timeout 120s;
+    proxy_send_timeout 120s;
+    proxy_read_timeout 120s;
+
+    location = / {
+        default_type application/json;
+        return 200 '{"service":"msrbooknest-api-gateway","status":"ok"}';
+    }
+
+    location ^~ /api/auth {
+        set $auth_upstream ${AUTH_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $auth_upstream$request_uri;
+    }
+
+    location ^~ /api/products {
+        set $catalog_upstream ${CATALOG_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $catalog_upstream$request_uri;
+    }
+
+    location ^~ /api/books {
+        set $catalog_upstream ${CATALOG_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $catalog_upstream$request_uri;
+    }
+
+    location ^~ /api/admin {
+        set $catalog_upstream ${CATALOG_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $catalog_upstream$request_uri;
+    }
+
+    location ^~ /api/cart {
+        set $cart_upstream ${CART_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $cart_upstream$request_uri;
+    }
+
+    location ^~ /api/wishlist {
+        set $cart_upstream ${CART_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $cart_upstream$request_uri;
+    }
+
+    location ^~ /api/orders {
+        set $order_upstream ${ORDER_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $order_upstream$request_uri;
+    }
+
+    location ^~ /api/payments {
+        set $payment_upstream ${PAYMENT_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $payment_upstream$request_uri;
+    }
+
+    location ^~ /api/buybacks {
+        set $buyback_upstream ${BUYBACK_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $buyback_upstream$request_uri;
+    }
+
+    location / {
+        default_type application/json;
+        return 404 '{"error":"Not found"}';
+    }
+}

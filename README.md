@@ -19,7 +19,7 @@ For a guided interview walkthrough, seeded account details, API links, troublesh
 
 ## Public browser demo
 
-The React storefront is published with GitHub Pages at <https://srinivasa-maramreddy.github.io/msrbooknest/>. By default it uses a browser-only mock adapter, so sample catalog, cart, checkout, account, and used-book buyback actions are saved in that browser. To connect it to the real Spring APIs, set the GitHub Actions repository variable `VITE_BACKEND_BASE_URL` to the public HTTPS API gateway URL and rerun the Pages workflow. For a no-cost portfolio deployment of the six Spring services, MySQL, and Kafka, see [the Oracle Always Free demo deployment guide](docs/oracle-free-deployment.md). The local Docker Compose demo remains available for development.
+The React storefront is published with GitHub Pages at <https://srinivasa-maramreddy.github.io/msrbooknest/>. By default it uses a browser-only mock adapter, so sample catalog, cart, checkout, account, and used-book buyback actions are saved in that browser. To connect it to the real Spring APIs, set the GitHub Actions repository variable `VITE_BACKEND_BASE_URL` to the public HTTPS API gateway URL and rerun the Pages workflow. For a no-card demo deployment, see [the Render and Aiven guide](docs/no-card-deployment.md). The [Oracle Always Free guide](docs/oracle-free-deployment.md) remains available for a VM deployment, and local Docker Compose remains available for development.
 
 Demo sign-in:
 
