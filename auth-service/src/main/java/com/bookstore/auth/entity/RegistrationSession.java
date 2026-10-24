@@ -23,6 +23,15 @@ public class RegistrationSession {
     @Column(nullable = false, length = 20)
     private String phoneNumber;
 
+    // Legacy columns remain NOT NULL in the hosted database from the SMS OTP schema.
+    // Keep them mapped with safe defaults so email-only registration can insert rows
+    // without restoring or using SMS verification.
+    @Column(name = "phone_otp_attempts", nullable = false)
+    private int legacyPhoneOtpAttempts;
+
+    @Column(name = "phone_verified", nullable = false)
+    private boolean legacyPhoneVerified;
+
     @Column(length = 255)
     private String email;
 
