@@ -2010,40 +2010,40 @@ body { color: var(--ink); background: var(--paper); }
 
 /* Give the homepage promotions a prominent billboard size on desktop. */
 @media (min-width: 761px) {
-  .marketplace-carousel { width: 100%; max-width: 1480px; }
+  .marketplace-carousel { width: 100%; max-width: 1600px; }
   .marketplace-ad {
-    min-height: clamp(500px, 38vw, 600px);
+    min-height: clamp(640px, 48vw, 800px);
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: clamp(40px, 5.5vw, 84px);
-    padding: clamp(48px, 5.5vw, 84px) clamp(48px, 6.5vw, 104px);
+    gap: clamp(48px, 6vw, 96px);
+    padding: clamp(56px, 6vw, 92px) clamp(54px, 6.8vw, 112px);
   }
   .marketplace-ad-art {
     width: 100%;
-    max-width: 600px;
-    height: clamp(330px, 30vw, 420px);
+    max-width: 680px;
+    height: clamp(400px, 34vw, 510px);
   }
-  .marketplace-ad-art::before { width: clamp(250px, 24vw, 340px); }
-  .ad-cover-photo { width: clamp(154px, 12vw, 178px); height: clamp(220px, 17.2vw, 254px); }
-  .ad-cover-photo-one, .ad-cover-photo-three { top: 38px; left: calc(50% - 154px); }
-  .ad-cover-photo-two, .ad-cover-photo-four { top: 76px; left: calc(50% - 5px); }
-  .ad-cover-photo-five { top: 50px; left: calc(50% - 77px); }
-  .marketplace-ad-copy { max-width: 640px; }
-  .marketplace-ad-copy .eyebrow { font-size: 10px; }
-  .marketplace-ad-copy h2 { font-size: clamp(44px, 4vw, 62px); }
-  .marketplace-ad-copy p { max-width: 500px; min-height: 54px; font-size: 15px; }
-  .marketplace-ad-copy .button { min-height: 52px; padding: 0 22px; font-size: 13px; }
+  .marketplace-ad-art::before { width: clamp(290px, 27vw, 380px); }
+  .ad-cover-photo { width: clamp(170px, 13vw, 205px); height: clamp(242px, 18.2vw, 286px); }
+  .ad-cover-photo-one, .ad-cover-photo-three { top: 44px; left: calc(50% - 176px); }
+  .ad-cover-photo-two, .ad-cover-photo-four { top: 82px; left: calc(50% - 5px); }
+  .ad-cover-photo-five { top: 56px; left: calc(50% - 86px); }
+  .marketplace-ad-copy { max-width: 700px; }
+  .marketplace-ad-copy .eyebrow { font-size: 11px; }
+  .marketplace-ad-copy h2 { font-size: clamp(50px, 4.6vw, 72px); }
+  .marketplace-ad-copy p { max-width: 540px; min-height: 60px; font-size: 17px; }
+  .marketplace-ad-copy .button { min-height: 56px; padding: 0 24px; font-size: 14px; }
 }
 
 @media (min-width: 761px) and (max-width: 1100px) {
-  .marketplace-ad { min-height: clamp(430px, 48vw, 500px); gap: 28px; padding: 36px; }
-  .marketplace-ad-art { height: 310px; }
-  .marketplace-ad-art::before { width: clamp(205px, 25vw, 260px); }
-  .ad-cover-photo { width: 132px; height: 188px; }
-  .ad-cover-photo-one, .ad-cover-photo-three { top: 30px; left: calc(50% - 112px); }
-  .ad-cover-photo-two, .ad-cover-photo-four { top: 54px; left: calc(50% - 4px); }
-  .ad-cover-photo-five { top: 38px; left: calc(50% - 55px); }
-  .marketplace-ad-copy h2 { font-size: clamp(32px, 4vw, 44px); }
-  .marketplace-ad-copy p { font-size: 12px; }
+  .marketplace-ad { min-height: clamp(500px, 56vw, 600px); gap: 30px; padding: 42px; }
+  .marketplace-ad-art { height: 350px; }
+  .marketplace-ad-art::before { width: clamp(230px, 27vw, 290px); }
+  .ad-cover-photo { width: 146px; height: 207px; }
+  .ad-cover-photo-one, .ad-cover-photo-three { top: 34px; left: calc(50% - 124px); }
+  .ad-cover-photo-two, .ad-cover-photo-four { top: 62px; left: calc(50% - 4px); }
+  .ad-cover-photo-five { top: 42px; left: calc(50% - 61px); }
+  .marketplace-ad-copy h2 { font-size: clamp(36px, 4.4vw, 48px); }
+  .marketplace-ad-copy p { font-size: 13px; }
 }
 
 @media (max-width: 760px) {
@@ -2107,34 +2107,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 /* Mobile carousel artwork: stack the copy under centered covers so narrow cards never crop them. */
 @media (max-width: 760px) {
   .marketplace-ad {
-    min-height: 420px;
+    min-height: 480px;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 215px auto;
+    grid-template-rows: 245px auto;
     align-content: center;
-    gap: 18px;
-    padding: 28px 24px 32px;
+    gap: 22px;
+    padding: 32px 26px 38px;
   }
   .marketplace-ad-art {
-    width: min(100%, 360px);
-    max-width: 360px;
-    height: 215px;
+    width: min(100%, 390px);
+    max-width: 390px;
+    height: 245px;
     overflow: visible;
   }
   .marketplace-ad-art::before {
-    width: clamp(150px, 46vw, 190px);
+    width: clamp(170px, 48vw, 210px);
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
   }
-  .ad-cover-photo { width: 116px; height: 164px; }
-  .ad-cover-photo-one, .ad-cover-photo-three { top: 18px; left: calc(50% - 99px); transform: rotate(-10deg); }
-  .ad-cover-photo-two, .ad-cover-photo-four { top: 28px; left: calc(50% - 7px); transform: rotate(9deg); }
-  .ad-cover-photo-five { top: 21px; left: calc(50% - 58px); transform: rotate(-5deg); }
+  .ad-cover-photo { width: 124px; height: 175px; }
+  .ad-cover-photo-one, .ad-cover-photo-three { top: 22px; left: calc(50% - 105px); transform: rotate(-10deg); }
+  .ad-cover-photo-two, .ad-cover-photo-four { top: 34px; left: calc(50% - 7px); transform: rotate(9deg); }
+  .ad-cover-photo-five { top: 25px; left: calc(50% - 62px); transform: rotate(-5deg); }
   .marketplace-ad-copy { width: min(100%, 500px); justify-self: center; }
   .marketplace-ad-copy .eyebrow { font-size: 8px; }
-  .marketplace-ad-copy h2 { margin: 7px 0 9px; font-size: clamp(28px, 6vw, 36px); }
-  .marketplace-ad-copy p { min-height: 0; margin-bottom: 14px; font-size: 12px; }
-  .marketplace-ad-copy .button { min-height: 44px; }
+  .marketplace-ad-copy h2 { margin: 8px 0 10px; font-size: clamp(30px, 6.5vw, 40px); }
+  .marketplace-ad-copy p { min-height: 0; margin-bottom: 16px; font-size: 13px; }
+  .marketplace-ad-copy .button { min-height: 48px; }
 
   /* The drawer holds Books and Categories; keep account and shopping actions visible here. */
   .site-header {
@@ -2169,20 +2169,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 @media (max-width: 440px) {
   .marketplace-ad {
-    min-height: 390px;
-    grid-template-rows: 178px auto;
-    gap: 13px;
-    padding: 23px 18px 25px;
+    min-height: 440px;
+    grid-template-rows: 198px auto;
+    gap: 17px;
+    padding: 27px 20px 30px;
   }
-  .marketplace-ad-art { height: 178px; max-width: 300px; }
-  .marketplace-ad-art::before { width: clamp(132px, 42vw, 156px); }
-  .ad-cover-photo { width: 98px; height: 138px; }
-  .ad-cover-photo-one, .ad-cover-photo-three { top: 16px; left: calc(50% - 85px); transform: rotate(-9deg); }
-  .ad-cover-photo-two, .ad-cover-photo-four { top: 24px; left: calc(50% - 5px); transform: rotate(8deg); }
-  .ad-cover-photo-five { top: 17px; left: calc(50% - 43px); transform: rotate(-5deg); }
-  .marketplace-ad-copy h2 { font-size: clamp(25px, 7vw, 30px); }
-  .marketplace-ad-copy p { font-size: 11px; }
-  .marketplace-ad-copy .button { min-height: 42px; }
+  .marketplace-ad-art { height: 198px; max-width: 320px; }
+  .marketplace-ad-art::before { width: clamp(145px, 44vw, 170px); }
+  .ad-cover-photo { width: 108px; height: 152px; }
+  .ad-cover-photo-one, .ad-cover-photo-three { top: 18px; left: calc(50% - 92px); transform: rotate(-9deg); }
+  .ad-cover-photo-two, .ad-cover-photo-four { top: 27px; left: calc(50% - 5px); transform: rotate(8deg); }
+  .ad-cover-photo-five { top: 20px; left: calc(50% - 48px); transform: rotate(-5deg); }
+  .marketplace-ad-copy h2 { font-size: clamp(27px, 7.5vw, 33px); }
+  .marketplace-ad-copy p { font-size: 12px; }
+  .marketplace-ad-copy .button { min-height: 45px; }
   .header-actions .wishlist-header { display: none; }
   .header-actions:not(.is-signed-in) .account-action { display: inline-flex; }
 }
