@@ -1,6 +1,7 @@
 package com.bookstore.payment.controller;
 
 import com.bookstore.payment.dto.GatewayOrderRequest;
+import com.bookstore.payment.dto.MockPaymentRequest;
 import com.bookstore.payment.dto.PaymentVerificationRequest;
 import com.bookstore.payment.service.PaymentService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,6 +43,24 @@ public class PaymentController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", ex.getMessage()));
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", "Payment service is temporarily unavailable."));
+        }
+    }
+
+    @PostMapping("/mock/collect")
+    public ResponseEntity<?> collectMockPayment(@Valid @RequestBody MockPaymentRequest request,
+                                                @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                                HttpServletRequest httpRequest) {
+        String email = getEmail();
+        if (email == null) return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
+        try {
+            return ResponseEntity.ok(paymentService.collectMockPayment(email,
+                    httpRequest.getHeader("Authorization"), request, idempotencyKey));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", ex.getMessage()));
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", "The NPCI demo simulator is temporarily unavailable."));
         }
     }
 

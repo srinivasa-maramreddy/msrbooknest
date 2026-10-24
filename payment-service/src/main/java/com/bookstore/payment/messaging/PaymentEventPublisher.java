@@ -21,9 +21,13 @@ public class PaymentEventPublisher {
     }
 
     public void paymentSucceeded(String orderRequestId, String paymentId) {
+        paymentSucceeded(orderRequestId, paymentId, "Razorpay payment captured and verified.");
+    }
+
+    public void paymentSucceeded(String orderRequestId, String paymentId, String message) {
         try {
             PaymentSucceededEvent event = new PaymentSucceededEvent(UUID.randomUUID().toString(), 1, Instant.now(),
-                    orderRequestId, paymentId, "Razorpay payment captured and verified.");
+                    orderRequestId, paymentId, message);
             kafkaTemplate.send(BookstoreTopics.PAYMENT_SUCCEEDED, orderRequestId,
                     objectMapper.writeValueAsString(event)).get(10, TimeUnit.SECONDS);
         } catch (Exception ex) {

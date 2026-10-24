@@ -1,6 +1,7 @@
 package com.bookstore.payment.service;
 
 import com.bookstore.payment.dto.GatewayOrderRequest;
+import com.bookstore.payment.dto.MockPaymentRequest;
 import com.bookstore.payment.dto.PaymentResponse;
 import com.bookstore.payment.dto.PaymentVerificationRequest;
 import com.bookstore.payment.entity.GatewayWebhookEvent;
@@ -34,6 +35,7 @@ public class PaymentService {
     private final PaymentEventPublisher eventPublisher;
     private final RestClient orderClient;
     private final ObjectMapper objectMapper;
+    private final MockNpciGateway mockNpciGateway;
 
     public PaymentService(PaymentTransactionRepository paymentRepository,
                           GatewayWebhookEventRepository webhookRepository,
@@ -42,6 +44,7 @@ public class PaymentService {
                           PaymentEventPublisher eventPublisher,
                           RestClient.Builder restClientBuilder,
                           ObjectMapper objectMapper,
+                          MockNpciGateway mockNpciGateway,
                           @Value("${app.services.order-base-url:http://localhost:8083}") String orderBaseUrl) {
         this.paymentRepository = paymentRepository;
         this.webhookRepository = webhookRepository;
@@ -50,6 +53,7 @@ public class PaymentService {
         this.eventPublisher = eventPublisher;
         this.orderClient = restClientBuilder.baseUrl(orderBaseUrl).build();
         this.objectMapper = objectMapper;
+        this.mockNpciGateway = mockNpciGateway;
     }
 
     public PaymentResponse createGatewayOrder(String customerEmail, String authorization,
@@ -72,6 +76,9 @@ public class PaymentService {
         PaymentTransaction existing = store.find(orderRequestId);
         if (existing != null) {
             assertPaymentOwnership(existing, customerEmail, trustedAmount);
+            if (existing.getGatewayOrderId() != null && existing.getGatewayOrderId().startsWith("NPCI-DEMO-ORDER-")) {
+                throw new IllegalStateException("This order already uses the NPCI demo simulator. Continue with its existing payment attempt.");
+            }
             if (existing.getStatus() == PaymentStatus.SUCCESS) return toResponse(existing, store.latestAttempt(orderRequestId));
             if (existing.getGatewayOrderId() != null) {
                 PaymentAttempt attempt = createAttemptSafely(orderRequestId, attemptRequestId, existing.getGatewayOrderId(), trustedAmount);
@@ -120,11 +127,71 @@ public class PaymentService {
         }
     }
 
+    public PaymentResponse collectMockPayment(String customerEmail, String authorization,
+                                              MockPaymentRequest request, String idempotencyKey) {
+        if (request == null || request.getOrderRequestId() == null || request.getOrderRequestId().isBlank()) {
+            throw new IllegalArgumentException("Order reference is required");
+        }
+        String orderRequestId = request.getOrderRequestId();
+        String attemptRequestId = request.getAttemptRequestId();
+        if (attemptRequestId == null || attemptRequestId.isBlank() || attemptRequestId.length() > 80
+                || idempotencyKey == null || !idempotencyKey.equals(attemptRequestId)) {
+            throw new IllegalArgumentException("Idempotency-Key must match the payment attempt reference");
+        }
+
+        OrderSnapshot order = findOwnedOrder(orderRequestId, authorization);
+        if (!"UPI".equalsIgnoreCase(order.paymentMethod)) throw new IllegalArgumentException("Only UPI is supported");
+        BigDecimal trustedAmount = money(order.totalAmount);
+
+        PaymentTransaction transaction = store.find(orderRequestId);
+        if (transaction == null) {
+            if (!"PENDING_PAYMENT".equals(order.status)) throw new IllegalStateException("This order is not awaiting payment");
+            try {
+                PaymentTransactionStore.Registration registration = store.createOrLoad(
+                        orderRequestId, orderRequestId, customerEmail, trustedAmount.setScale(2, RoundingMode.UNNECESSARY));
+                transaction = registration.transaction();
+            } catch (DataIntegrityViolationException concurrentRequest) {
+                transaction = store.find(orderRequestId);
+                if (transaction == null) throw concurrentRequest;
+                assertPaymentOwnership(transaction, customerEmail, trustedAmount);
+            }
+        }
+
+        assertPaymentOwnership(transaction, customerEmail, trustedAmount);
+        if (transaction.getStatus() == PaymentStatus.SUCCESS) {
+            PaymentAttempt completed = store.latestAttempt(orderRequestId);
+            if (completed != null && completed.getGatewayOrderId().startsWith("NPCI-DEMO-ORDER-")) {
+                eventPublisher.paymentSucceeded(orderRequestId, transaction.getGatewayPaymentId(), transaction.getMessage());
+                return toResponse(transaction, completed);
+            }
+            throw new IllegalStateException("This order has already been paid through another payment flow");
+        }
+        if (transaction.getGatewayOrderId() != null && !transaction.getGatewayOrderId().startsWith("NPCI-DEMO-ORDER-")) {
+            throw new IllegalStateException("This order already has a payment attempt with another provider");
+        }
+
+        MockNpciGateway.Result result = mockNpciGateway.collect(request.getVpa(), trustedAmount);
+        PaymentStatus status = result.approved() ? PaymentStatus.SUCCESS : PaymentStatus.FAILED;
+        String mockOrderId = transaction.getGatewayOrderId();
+        if (mockOrderId == null) {
+            mockOrderId = "NPCI-DEMO-ORDER-" + java.util.UUID.randomUUID().toString().replace("-", "");
+        }
+        PaymentTransactionStore.MockPaymentResult saved = store.recordMockPayment(orderRequestId, attemptRequestId,
+                mockOrderId, result.reference(), trustedAmount, status, result.message());
+        if (saved.transaction().getStatus() == PaymentStatus.SUCCESS) {
+            eventPublisher.paymentSucceeded(orderRequestId, saved.transaction().getGatewayPaymentId(), saved.transaction().getMessage());
+        }
+        return toResponse(saved.transaction(), saved.attempt());
+    }
+
     public PaymentResponse verifyPayment(String customerEmail, String authorization, PaymentVerificationRequest request) {
         OrderSnapshot order = findOwnedOrder(request.getOrderRequestId(), authorization);
         PaymentTransaction transaction = store.find(request.getOrderRequestId());
         if (transaction == null) throw new IllegalArgumentException("Payment was not created for this order");
         assertPaymentOwnership(transaction, customerEmail, money(order.totalAmount));
+        if (transaction.getGatewayOrderId() != null && transaction.getGatewayOrderId().startsWith("NPCI-DEMO-ORDER-")) {
+            throw new IllegalStateException("This order uses the NPCI demo simulator and cannot be verified as a Razorpay payment");
+        }
         PaymentAttempt attempt = store.findAttempt(request.getOrderRequestId(), request.getAttemptRequestId());
         if (attempt == null) throw new IllegalArgumentException("Payment attempt was not found for this order");
         if (transaction.getStatus() == PaymentStatus.SUCCESS) {
@@ -167,10 +234,17 @@ public class PaymentService {
         assertPaymentOwnership(transaction, customerEmail, money(order.totalAmount));
         PaymentAttempt attempt = store.latestAttempt(orderRequestId);
         if (transaction.getStatus() == PaymentStatus.SUCCESS) {
-            eventPublisher.paymentSucceeded(transaction.getOrderRequestId(), transaction.getGatewayPaymentId());
+            if (attempt != null && attempt.getGatewayOrderId().startsWith("NPCI-DEMO-ORDER-")) {
+                eventPublisher.paymentSucceeded(transaction.getOrderRequestId(), transaction.getGatewayPaymentId(), transaction.getMessage());
+            } else {
+                eventPublisher.paymentSucceeded(transaction.getOrderRequestId(), transaction.getGatewayPaymentId());
+            }
             return toResponse(transaction, attempt);
         }
         if (attempt == null) return toResponse(transaction, null);
+        if (attempt.getGatewayOrderId() != null && attempt.getGatewayOrderId().startsWith("NPCI-DEMO-ORDER-")) {
+            return toResponse(transaction, attempt);
+        }
         if (attempt.getGatewayPaymentId() == null) return reconcileOrderPayments(transaction, attempt);
         JsonNode payment = gateway.fetchPayment(attempt.getGatewayPaymentId());
         ensureGatewayPaymentMatches(transaction, payment);

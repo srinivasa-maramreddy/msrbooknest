@@ -145,6 +145,35 @@ public class PaymentTransactionStore {
         return saved;
     }
 
+    @Transactional
+    public MockPaymentResult recordMockPayment(String orderRequestId, String attemptRequestId,
+                                               String mockOrderId, String mockPaymentId,
+                                               BigDecimal amount, PaymentStatus status, String message) {
+        PaymentTransaction transaction = requiredForUpdate(orderRequestId);
+        if (transaction.getGatewayOrderId() != null && !transaction.getGatewayOrderId().startsWith("NPCI-DEMO-ORDER-")) {
+            throw new IllegalStateException("This order already has a payment attempt with another provider");
+        }
+        if (transaction.getGatewayOrderId() == null) {
+            transaction.setGatewayOrderId(mockOrderId);
+            transaction.setProviderReference(mockOrderId);
+            transaction.setStatus(PaymentStatus.PENDING);
+            transaction.setMessage("NPCI demo simulator is ready.");
+            repository.save(transaction);
+        }
+
+        PaymentAttempt duplicate = findAttempt(orderRequestId, attemptRequestId);
+        if (duplicate != null) return new MockPaymentResult(transaction, duplicate);
+
+        PaymentAttempt latest = latestAttempt(orderRequestId);
+        if (latest != null && latest.getStatus() != PaymentStatus.FAILED && latest.getStatus() != PaymentStatus.CANCELLED) {
+            throw new IllegalStateException("The current payment attempt is still processing. Check its status before retrying.");
+        }
+
+        PaymentAttempt attempt = createAttempt(orderRequestId, attemptRequestId, transaction.getGatewayOrderId(), amount);
+        PaymentAttempt updated = markPaymentResult(orderRequestId, attemptRequestId, mockPaymentId, status, message, true);
+        return new MockPaymentResult(transaction, updated);
+    }
+
     @Transactional(readOnly = true)
     public PaymentTransaction find(String orderRequestId) {
         return repository.findByOrderRequestId(orderRequestId).orElse(null);
@@ -176,4 +205,5 @@ public class PaymentTransactionStore {
     }
 
     public record Registration(PaymentTransaction transaction, boolean created) {}
+    public record MockPaymentResult(PaymentTransaction transaction, PaymentAttempt attempt) {}
 }

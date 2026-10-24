@@ -44,11 +44,13 @@ jobs:
         working-directory: customer-web-react
         run: pnpm install --frozen-lockfile
 
-      - name: Build the public browser demo
+      - name: Build the storefront
         working-directory: customer-web-react
         env:
           VITE_BASE_PATH: /msrbooknest/
-          VITE_DEMO_MODE: "true"
+          VITE_BACKEND_BASE_URL: ${{ vars.VITE_BACKEND_BASE_URL }}
+          VITE_DEMO_MODE: ${{ vars.VITE_BACKEND_BASE_URL == '' && 'true' || 'false' }}
+          VITE_MOCK_NPCI: "true"
         run: pnpm build
 
       - name: Upload GitHub Pages artifact

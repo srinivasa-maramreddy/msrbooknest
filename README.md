@@ -2,7 +2,7 @@
 
 **A portfolio-ready online bookstore built with React, Java 17, Spring Boot microservices, Spring Data JPA/Hibernate, Spring Security JWT, MySQL, and Kafka.**
 
-The demo covers the customer journey from account creation and search through cart, inventory reservation, UPI checkout, and order history. Checkout uses Razorpay Standard Checkout in test mode, verifies payment with the provider before marking an order paid, and is disabled until test credentials are configured. It also includes a used-book buyback workflow with photo submission, versioned quotations, mock video and physical reviews, DTDC tracking, returns, disputes, and a mock payout record.
+The demo covers the customer journey from account creation and search through cart, inventory reservation, UPI checkout, and order history. The local stack supports Razorpay Standard Checkout in test mode, with provider verification before an order is marked paid. The free hosted Pages setup instead offers a backend NPCI simulator with approved and declined paths; neither mock choice contacts a bank or moves money. It also includes a used-book buyback workflow with photo submission, versioned quotations, mock video and physical reviews, DTDC tracking, returns, disputes, and a mock payout record.
 
 ## Run the full demo
 
@@ -19,14 +19,14 @@ For a guided interview walkthrough, seeded account details, API links, troublesh
 
 ## Public browser demo
 
-The React storefront is published with GitHub Pages at <https://srinivasa-maramreddy.github.io/msrbooknest/>. The Pages build uses a browser-only mock adapter, so sample catalog, cart, checkout, account, and used-book buyback actions are saved in that browser. Checkout can simulate successful or failed payment outcomes for a demonstration; it never opens a payment provider or charges money. The Spring Boot services, MySQL, and Kafka remain available through the local Docker Compose demo above; GitHub Pages does not run those services.
+The React storefront is published with GitHub Pages at <https://srinivasa-maramreddy.github.io/msrbooknest/>. By default it uses a browser-only mock adapter, so sample catalog, cart, checkout, account, and used-book buyback actions are saved in that browser. To connect it to the real Spring APIs, set the GitHub Actions repository variable `VITE_BACKEND_BASE_URL` to the public HTTPS API gateway URL and rerun the Pages workflow. For a no-cost portfolio deployment of the six Spring services, MySQL, and Kafka, see [the Oracle Always Free demo deployment guide](docs/oracle-free-deployment.md). The local Docker Compose demo remains available for development.
 
 Demo sign-in:
 
 - Customer: `reader@msrbooknest.demo` / `ReaderDemo@123`
 - Admin: `admin@msrbooknest.demo` / `AdminDemo@123`
 
-The Pages deployment runs automatically when the storefront or its workflow changes on `main`.
+The Pages deployment runs automatically when the storefront or its workflow changes on `main`. Without `VITE_BACKEND_BASE_URL`, it continues to publish the browser-only demo.
 
 ## What the demo shows
 
@@ -36,7 +36,7 @@ The Pages deployment runs automatically when the storefront or its workflow chan
 - **Kafka checkout workflow:** verified payment events, an Order-service transactional outbox, duplicate-safe order updates, and inventory confirmation.
 - **Precise currency handling:** `BigDecimal` in Java and decimal columns in MySQL from book prices through payment events.
 - **Observable services:** restricted Spring Boot Actuator health, liveness, and readiness endpoints.
-- **Razorpay UPI test checkout:** server-priced orders, stable checkout idempotency keys, separately recorded retry attempts, signature/provider verification, status reconciliation, and duplicate-safe webhooks. Live payments are disabled by default.
+- **UPI payment:** Razorpay test mode locally, or a server-recorded NPCI mock approval/decline on the hosted free demo. Both keep stable checkout idempotency keys and separately recorded attempts; mock results never contact a payment network.
 - **Used-book buyback:** customer and admin dashboards, photo uploads, quote versions requiring explicit customer approval, simulated DTDC shipments, inspection evidence, return tracking, dispute decisions, and duplicate-safe mock payout.
 - **Container build:** multi-stage Java images, Maven dependency cache, and a non-root runtime user.
 

@@ -1,13 +1,14 @@
 import { getAccessToken } from "./auth.js";
 import { demoApi } from "./demo-api.js";
 
+const hostedBackend = (import.meta.env.VITE_BACKEND_BASE_URL || "").replace(/\/+$/, "");
 const API = {
-  auth: import.meta.env.VITE_AUTH_API_BASE_URL || "http://localhost:8081",
-  catalog: import.meta.env.VITE_CATALOG_API_BASE_URL || "http://localhost:8082",
-  cart: import.meta.env.VITE_CART_API_BASE_URL || "http://localhost:8084",
-  order: import.meta.env.VITE_ORDER_API_BASE_URL || "http://localhost:8083",
-  payment: import.meta.env.VITE_PAYMENT_API_BASE_URL || "http://localhost:8085",
-  buyback: import.meta.env.VITE_BUYBACK_API_BASE_URL || "http://localhost:8086",
+  auth: import.meta.env.VITE_AUTH_API_BASE_URL || hostedBackend || "http://localhost:8081",
+  catalog: import.meta.env.VITE_CATALOG_API_BASE_URL || hostedBackend || "http://localhost:8082",
+  cart: import.meta.env.VITE_CART_API_BASE_URL || hostedBackend || "http://localhost:8084",
+  order: import.meta.env.VITE_ORDER_API_BASE_URL || hostedBackend || "http://localhost:8083",
+  payment: import.meta.env.VITE_PAYMENT_API_BASE_URL || hostedBackend || "http://localhost:8085",
+  buyback: import.meta.env.VITE_BUYBACK_API_BASE_URL || hostedBackend || "http://localhost:8086",
 };
 
 async function request(base, path, { token, ...options } = {}) {
@@ -86,6 +87,9 @@ const springApi = {
   getOwnedOrder: (token, orderRequestId) => request(API.order, `/api/orders/me/reference/${encodeURIComponent(orderRequestId)}`, { token }),
   createPaymentOrder: (token, orderRequestId, attemptRequestId, idempotencyKey) => request(API.payment, "/api/payments/create", {
     ...json("POST", { orderRequestId, attemptRequestId }), token, headers: { "Idempotency-Key": idempotencyKey },
+  }),
+  simulateNpciPayment: (token, orderRequestId, attemptRequestId, vpa) => request(API.payment, "/api/payments/mock/collect", {
+    ...json("POST", { orderRequestId, attemptRequestId, vpa }), token, headers: { "Idempotency-Key": attemptRequestId },
   }),
   verifyPayment: (token, payload) => request(API.payment, "/api/payments/verify", { ...json("POST", payload), token }),
   getPaymentStatus: (token, orderRequestId) => request(API.payment, `/api/payments/orders/${encodeURIComponent(orderRequestId)}/status`, { token }),
