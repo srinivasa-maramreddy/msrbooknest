@@ -58,7 +58,7 @@ Open:
 
 Registration OTP flow:
 
-1. `POST /auth/register` with `verificationChannel` set to `EMAIL` or `PHONE`
+1. `POST /auth/register` with `verificationChannel` set to `EMAIL`
 2. `POST /auth/verify-otp` with `destination`, `otpCode`, and `purpose=REGISTRATION`
 
 Login OTP flow:
@@ -130,5 +130,5 @@ Import these files into Postman:
 
 OTP variable notes:
 - Set `otpCode` for customer OTP verify request.
-- Set `loginVerificationChannel` (`EMAIL` or `PHONE`) for login OTP send request.
+- Set `loginVerificationChannel` to `EMAIL` for login OTP send request.
 - Set `adminOtpCode` for admin OTP verify request.

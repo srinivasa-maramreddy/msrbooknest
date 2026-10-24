@@ -125,7 +125,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void loginShouldSendOtpChallengeForValidCredentials() {
+    void loginShouldRejectPhoneOtpChannel() {
         LoginRequest request = new LoginRequest();
         request.setEmail("user@book.com");
         request.setPassword("Pass@1234");
@@ -142,13 +142,7 @@ class AuthServiceImplTest {
         );
 
         when(userRepository.findByEmail("user@book.com")).thenReturn(Optional.of(user));
-        when(otpCodeGenerator.generateCode()).thenReturn("654321");
-        when(otpVerificationRepository.save(any(OtpVerification.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        RegisterInitiationResponse response = authService.login(request);
-
-        assertEquals(VerificationChannel.PHONE, response.getVerificationChannel());
-        assertEquals(OtpPurpose.LOGIN, response.getPurpose());
-        verify(otpNotifier).sendOtp(VerificationChannel.PHONE, "9876543210", "654321");
+        assertThrows(BusinessValidationException.class, () -> authService.login(request));
     }
 }

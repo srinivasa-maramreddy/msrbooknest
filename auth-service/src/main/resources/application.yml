@@ -46,14 +46,6 @@ app:
   jwt:
     secret: ${APP_JWT_SECRET:msrbooknest-demo-signing-key-change-me}
     expiration-ms: 86400000
-  sms:
-    msg91:
-      enabled: ${APP_SMS_MSG91_ENABLED:false}
-      endpoint: ${APP_SMS_MSG91_ENDPOINT:https://control.msg91.com/api/v5/flow/}
-      auth-key: ${APP_SMS_MSG91_AUTH_KEY:}
-      template-id: ${APP_SMS_MSG91_TEMPLATE_ID:}
-      country-code: ${APP_SMS_MSG91_COUNTRY_CODE:91}
-      otp-variable: ${APP_SMS_MSG91_OTP_VARIABLE:OTP}
   email:
     otp:
       enabled: ${APP_EMAIL_OTP_ENABLED:false}

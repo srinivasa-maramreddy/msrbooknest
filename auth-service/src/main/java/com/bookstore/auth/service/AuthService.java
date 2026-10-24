@@ -8,8 +8,7 @@ import com.bookstore.auth.dto.PasswordRecoveryResponse;
 import com.bookstore.auth.dto.PasswordResetRequest;
 import com.bookstore.auth.dto.RegisterCompleteRequest;
 import com.bookstore.auth.dto.RegisterEmailOtpRequest;
-import com.bookstore.auth.dto.RegisterPhoneStartRequest;
-import com.bookstore.auth.dto.RegisterPhoneVerifyRequest;
+import com.bookstore.auth.dto.RegisterStartRequest;
 import com.bookstore.auth.dto.RegistrationStepResponse;
 import com.bookstore.auth.entity.OtpPurpose;
 import com.bookstore.auth.entity.Role;
@@ -47,7 +46,6 @@ public class AuthService {
     private final RegistrationSessionRepository registrationSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final Msg91OtpService msg91OtpService;
     private final EmailOtpService emailOtpService;
 
     @Value("${app.otp.dev.show-codes:true}")
@@ -62,7 +60,6 @@ public class AuthService {
             RegistrationSessionRepository registrationSessionRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            Msg91OtpService msg91OtpService,
             EmailOtpService emailOtpService
     ) {
         this.userRepository = userRepository;
@@ -70,11 +67,10 @@ public class AuthService {
         this.registrationSessionRepository = registrationSessionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.msg91OtpService = msg91OtpService;
         this.emailOtpService = emailOtpService;
     }
 
-    public RegistrationStepResponse startPhoneRegistration(RegisterPhoneStartRequest request) {
+    public RegistrationStepResponse startRegistration(RegisterStartRequest request) {
         String name = request.getName() == null ? "" : request.getName().trim();
         if (name.isEmpty()) {
             throw new RuntimeException("Name is required");
@@ -95,58 +91,14 @@ public class AuthService {
         RegistrationSession session = new RegistrationSession();
         session.setName(name);
         session.setPhoneNumber(phoneNumber);
-        session.setPhoneVerified(false);
         session.setEmailVerified(false);
         session.setCompleted(false);
-
-        String otpCode = generateOtpCode();
-        session.setPhoneOtpHash(passwordEncoder.encode(otpCode));
-        session.setPhoneOtpExpiresAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
-        session.setPhoneOtpAttempts(0);
-
         session = registrationSessionRepository.save(session);
-        if (showDevOtps) {
-            log.info("Dev OTP mode active. Skipping SMS gateway for phone ending {}", phoneNumber.substring(6));
-        } else {
-            msg91OtpService.sendOtp(phoneNumber, otpCode);
-        }
 
         return new RegistrationStepResponse(
-                "Phone OTP sent. Verify phone to continue.",
+                "Details saved. Verify your email to continue.",
                 session.getId(),
                 maskDestination(phoneNumber, true),
-                null,
-                false,
-                showDevOtps ? otpCode : null,
-                null
-        );
-    }
-
-    public RegistrationStepResponse verifyPhoneRegistration(RegisterPhoneVerifyRequest request) {
-        RegistrationSession session = findActiveSession(request.getRegistrationId());
-
-        if (session.isPhoneVerified()) {
-            return new RegistrationStepResponse(
-                    "Phone already verified. Continue to email step.",
-                    session.getId(),
-                    maskDestination(session.getPhoneNumber(), true),
-                    maskDestination(session.getEmail(), false),
-                    true,
-                    null,
-                    null
-            );
-        }
-
-        verifyPhoneOtp(session, request.getOtpCode());
-        session.setPhoneVerified(true);
-        registrationSessionRepository.save(session);
-
-        return new RegistrationStepResponse(
-                "Phone verified. Continue with email verification.",
-                session.getId(),
-                maskDestination(session.getPhoneNumber(), true),
-                null,
-                true,
                 null,
                 null
         );
@@ -154,9 +106,6 @@ public class AuthService {
 
     public RegistrationStepResponse sendEmailRegistrationOtp(RegisterEmailOtpRequest request) {
         RegistrationSession session = findActiveSession(request.getRegistrationId());
-        if (!session.isPhoneVerified()) {
-            throw new RuntimeException("Verify phone OTP first");
-        }
 
         String email = normalizeEmail(request.getEmail());
         if (email == null) {
@@ -187,17 +136,12 @@ public class AuthService {
                 session.getId(),
                 maskDestination(session.getPhoneNumber(), true),
                 maskDestination(email, false),
-                true,
-                null,
                 showDevOtps ? otpCode : null
         );
     }
 
     public AuthResponse completeRegistration(RegisterCompleteRequest request) {
         RegistrationSession session = findActiveSession(request.getRegistrationId());
-        if (!session.isPhoneVerified()) {
-            throw new RuntimeException("Verify phone OTP first");
-        }
 
         String email = normalizeEmail(request.getEmail());
         if (email == null) {
@@ -385,26 +329,6 @@ public class AuthService {
         }
 
         return session;
-    }
-
-    private void verifyPhoneOtp(RegistrationSession session, String otpCode) {
-        if (session.getPhoneOtpHash() == null || session.getPhoneOtpExpiresAt() == null) {
-            throw new RuntimeException("Phone OTP not requested");
-        }
-
-        if (session.getPhoneOtpExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Phone OTP expired. Request a new OTP.");
-        }
-
-        if (session.getPhoneOtpAttempts() >= OTP_MAX_ATTEMPTS) {
-            throw new RuntimeException("Maximum phone OTP attempts exceeded");
-        }
-
-        if (!passwordEncoder.matches(otpCode, session.getPhoneOtpHash())) {
-            session.setPhoneOtpAttempts(session.getPhoneOtpAttempts() + 1);
-            registrationSessionRepository.save(session);
-            throw new RuntimeException("Invalid phone OTP");
-        }
     }
 
     private void verifyEmailOtp(RegistrationSession session, String otpCode) {

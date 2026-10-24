@@ -33,7 +33,7 @@
                 "register"
               ]
             },
-            "description": "Sends OTP to email or phone based on verificationChannel."
+            "description": "Sends the registration OTP to the email address."
           },
           "event": [
             {
@@ -45,12 +45,8 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "const channel = pm.environment.get('verificationChannel');",
-                  "if (channel === 'PHONE') {",
-                  "    pm.environment.set('otpDestination', pm.environment.get('phoneNumber'));",
-                  "} else {",
-                  "    pm.environment.set('otpDestination', pm.environment.get('email'));",
-                  "}",
+                  "pm.environment.set('verificationChannel', 'EMAIL');",
+                  "pm.environment.set('otpDestination', pm.environment.get('email'));",
                   "",
                   "const data = pm.response.json();",
                   "if (data.verificationChannel) {",

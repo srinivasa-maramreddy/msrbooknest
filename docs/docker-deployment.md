@@ -37,7 +37,7 @@ Seeded admin account (catalog/order admin APIs):
 - Email: `admin@msrbooknest.demo`
 - Password: `AdminDemo@123`
 
-The UI lets you register with staged mobile and email OTP verification. In this local Compose configuration, codes are displayed in the UI for the demo; SMS and email are not sent. Passwords must be at least 10 characters and include a special character.
+The UI lets you register with email OTP verification. Mobile numbers are collected for account sign-in but are not verified by SMS. In this local Compose configuration, the email code is displayed in the UI for the demo; no email is sent. Passwords must be at least 10 characters and include a special character.
 
 ## Used-book buyback walkthrough
 
@@ -72,15 +72,15 @@ docker compose down
 
 This stops containers and keeps the named MySQL and Kafka volumes. `docker compose down -v` also deletes saved local data.
 
-## Optional email/SMS delivery
+## Optional email delivery
 
-For the interviewer demo, keep the local OTP display enabled. To try real registration delivery, copy [.env.otp.example](../.env.otp.example) to the ignored `.env.otp` file and add valid SMTP and MSG91 credentials. Then run:
+For the interviewer demo, keep the local OTP display enabled. To try real email delivery, copy [.env.otp.example](../.env.otp.example) to the ignored `.env.otp` file and add valid SMTP credentials. Then run:
 
 ```bash
 docker compose --env-file .env.otp -f docker-compose.yml -f docker-compose.otp.yml up -d --build
 ```
 
-The override enables both OTP providers and hides development codes. Compose passes no email/SMS credentials to Auth in the default demo stack. Never commit provider credentials. If a provider is missing or fails, registration returns a delivery error and OTPs are never written to logs. To return to demo behavior, run `docker compose up -d` with the base Compose file so all services share the base configuration again.
+The override enables email OTP delivery and hides development codes. Compose passes no email credentials to Auth in the default demo stack. Never commit provider credentials. If the email provider is missing or fails, registration returns a delivery error and OTPs are never written to logs. To return to demo behavior, run `docker compose up -d` with the base Compose file so all services share the base configuration again.
 
 ## Deployment boundary
 

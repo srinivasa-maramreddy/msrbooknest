@@ -25,13 +25,10 @@ public class LoggingOtpNotifier implements OtpNotifier {
 
     @Override
     public void sendOtp(VerificationChannel channel, String destination, String otpCode) {
-        if (channel == VerificationChannel.EMAIL) {
-            sendEmailOtp(destination, otpCode);
-            return;
+        if (channel != VerificationChannel.EMAIL) {
+            throw new IllegalArgumentException("Only email OTP delivery is supported");
         }
-
-        // SMS provider can be integrated here (Twilio/Gupshup/etc.)
-        log.info("OTP sent channel={} destination={} otp={}", channel, destination, otpCode);
+        sendEmailOtp(destination, otpCode);
     }
 
     private void sendEmailOtp(String destination, String otpCode) {

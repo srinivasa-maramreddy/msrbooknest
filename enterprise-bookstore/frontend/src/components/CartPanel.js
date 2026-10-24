@@ -34,9 +34,7 @@ function buildAuthContent(state) {
             <input type="password" id="loginPassword" placeholder="Password" required />
             <select id="loginChannel">
               <option value="EMAIL">Login OTP by Email</option>
-              <option value="PHONE">Login OTP by Phone</option>
             </select>
-            <input type="text" id="loginPhone" placeholder="Phone (for PHONE OTP verify step)" />
             <button class="btn btn-outline" type="submit">Send Login OTP</button>
           </form>
         `
@@ -51,11 +49,8 @@ function buildAuthContent(state) {
             <input type="email" id="registerEmail" placeholder="Email" required />
             <input type="text" id="registerPhone" placeholder="Phone (optional, digits only)" />
             <input type="password" id="registerPassword" placeholder="Password" required />
-            <select id="registerChannel">
-              <option value="EMAIL">Verify by Email OTP</option>
-              <option value="PHONE">Verify by Phone OTP</option>
-            </select>
-            <button class="btn btn-outline" type="submit">Register & Send OTP</button>
+            <p class="muted">Account verification uses email only.</p>
+            <button class="btn btn-outline" type="submit">Register & Send Email OTP</button>
           </form>
         `
         : ""
@@ -68,9 +63,8 @@ function buildAuthContent(state) {
             <div class="muted">Purpose: ${verifyPurpose}</div>
             <select id="verifyChannel">
               <option value="EMAIL" ${verifyChannel === "EMAIL" ? "selected" : ""}>Email</option>
-              <option value="PHONE" ${verifyChannel === "PHONE" ? "selected" : ""}>Phone</option>
             </select>
-            <input type="text" id="verifyDestination" placeholder="Email or phone" value="${verifyDestination}" required />
+            <input type="email" id="verifyDestination" placeholder="Email address" value="${verifyDestination}" required />
             <input type="text" id="verifyOtpCode" placeholder="OTP code" required />
             <button class="btn btn-outline" type="submit">Verify OTP</button>
             <button class="btn btn-outline" type="button" id="resendOtpBtn">Resend OTP</button>
@@ -147,8 +141,7 @@ export function createCartDrawer(state, handlers) {
       handlers.onLogin(
         drawer.querySelector("#loginEmail").value,
         drawer.querySelector("#loginPassword").value,
-        drawer.querySelector("#loginChannel").value,
-        drawer.querySelector("#loginPhone").value
+        drawer.querySelector("#loginChannel").value
       );
     });
   }
@@ -162,7 +155,7 @@ export function createCartDrawer(state, handlers) {
         email: drawer.querySelector("#registerEmail").value,
         phoneNumber: drawer.querySelector("#registerPhone").value,
         password: drawer.querySelector("#registerPassword").value,
-        verificationChannel: drawer.querySelector("#registerChannel").value
+        verificationChannel: "EMAIL"
       });
     });
   }

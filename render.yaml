@@ -33,8 +33,6 @@ services:
         value: "true"
       - key: APP_EMAIL_OTP_ENABLED
         value: "false"
-      - key: APP_SMS_MSG91_ENABLED
-        value: "false"
       - key: APP_HEALTH_MAIL_ENABLED
         value: "false"
       - key: SPRING_JPA_SHOW_SQL

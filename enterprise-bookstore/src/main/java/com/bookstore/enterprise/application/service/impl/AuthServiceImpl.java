@@ -233,17 +233,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AppUser findUserByDestination(VerificationChannel channel, String destination) {
-        if (channel == VerificationChannel.EMAIL) {
-            return userRepository.findByEmail(destination)
-                    .orElseThrow(() -> new BusinessValidationException("User not found for destination"));
-        }
-
-        return userRepository.findByPhoneNumber(destination)
+        return userRepository.findByEmail(destination)
                 .orElseThrow(() -> new BusinessValidationException("User not found for destination"));
     }
 
     private VerificationChannel resolveVerificationChannel(VerificationChannel channel) {
-        return channel == null ? VerificationChannel.EMAIL : channel;
+        if (channel != null && channel != VerificationChannel.EMAIL) {
+            throw new BusinessValidationException("Only email OTP verification is supported");
+        }
+        return VerificationChannel.EMAIL;
     }
 
     private OtpPurpose resolvePurpose(OtpPurpose purpose, OtpPurpose defaultPurpose) {
@@ -251,15 +249,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private String resolveDestination(AppUser user, VerificationChannel channel) {
-        if (channel == VerificationChannel.EMAIL) {
-            return user.getEmail();
-        }
-
-        if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
-            throw new BusinessValidationException("Phone number is required for PHONE verification");
-        }
-
-        return user.getPhoneNumber();
+        return user.getEmail();
     }
 
     private String normalizeEmail(String email) {
@@ -274,29 +264,14 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private String normalizeDestination(VerificationChannel channel, String destination) {
-        if (channel == VerificationChannel.EMAIL) {
-            return normalizeEmail(destination);
-        }
-
-        String normalizedPhone = normalizePhoneNumber(destination);
-        if (normalizedPhone == null || normalizedPhone.isBlank()) {
-            throw new BusinessValidationException("Phone number destination is required");
-        }
-        return normalizedPhone;
+        return normalizeEmail(destination);
     }
 
     private String maskDestination(String destination, VerificationChannel channel) {
-        if (channel == VerificationChannel.EMAIL) {
-            int atIndex = destination.indexOf('@');
-            if (atIndex <= 1) {
-                return destination;
-            }
-            return destination.charAt(0) + "***" + destination.substring(atIndex);
-        }
-
-        if (destination.length() <= 4) {
+        int atIndex = destination.indexOf('@');
+        if (atIndex <= 1) {
             return destination;
         }
-        return "******" + destination.substring(destination.length() - 4);
+        return destination.charAt(0) + "***" + destination.substring(atIndex);
     }
 }

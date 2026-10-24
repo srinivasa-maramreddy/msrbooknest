@@ -2,7 +2,7 @@ package com.bookstore.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
 
-public class RegisterPhoneStartRequest {
+public class RegisterStartRequest {
     @NotBlank
     private String name;
 

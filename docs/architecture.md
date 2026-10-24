@@ -97,7 +97,7 @@ The workflow is eventually consistent: the browser receives a pending order firs
 
 Auth verifies BCrypt password hashes and issues an HS256 JWT with account subject, email, role, and expiry claims. Catalog, Cart, Order, Payment, and Buyback are stateless JWT resource servers. Public product browsing is allowed; shopper-specific cart/order/buyback actions require a token; catalog writes, order administration, and buyback review, inspection, return dispatch, and dispute resolution are restricted to admins.
 
-The local registration journey stages phone OTP, email OTP, then account creation. Compose uses a demo setting that displays OTP codes in the storefront instead of delivering them. The Auth service includes MSG91 SMS and SMTP email adapters for configured environments; delivery failures return an error and OTPs are not written to logs. Demo secrets, CORS, and the shared HMAC signing key must be replaced before public hosting.
+The local registration journey collects name, mobile number, email, and password, then verifies the email before account creation. Mobile numbers remain available for sign-in but are not OTP destinations. Compose uses a demo setting that displays email codes in the storefront instead of delivering them. Real email delivery is available through SMTP; SMS OTP integration is not included. Demo secrets, CORS, and the shared HMAC signing key must be replaced before public hosting.
 
 ## API and operations surface
 
@@ -126,5 +126,5 @@ Only Actuator health endpoints are exposed. Health, liveness, and readiness are 
 - UPI checkout uses Razorpay Test Mode when explicitly configured. Live credentials are disabled by default. See [the setup and verification flow](razorpay-test-checkout.md).
 - A verified payment event arriving for a cancelled order leaves it cancelled, records `paymentReconciliationStatus=REFUND_REQUIRED`, and does not enqueue fulfilment. The demo records this for manual refund reconciliation; it does not automatically issue a refund.
 - Buyback video verification, courier tracking, payout, return shipping, and dispute review are simulated. Book and inspection photos persist in the local `buyback_db`; no camera, courier, bank, or payment provider is contacted for buyback.
-- OTP codes are shown only because Compose is configured for local demo mode. Real delivery needs valid SMTP and MSG91 configuration and must disable code display.
+- OTP codes are shown only because Compose is configured for local demo mode. Real email delivery needs valid SMTP configuration and must disable code display.
 - A single local broker and shared MySQL server make the project easy to run. Production would use resilient managed infrastructure, service credentials, migrations, monitoring, and a defined recovery policy.

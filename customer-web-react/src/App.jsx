@@ -534,7 +534,6 @@ function App() {
   const [registrationStep, setRegistrationStep] = useState("details");
   const [registration, setRegistration] = useState(EMPTY_REGISTRATION);
   const [registrationId, setRegistrationId] = useState("");
-  const [phoneDemoOtp, setPhoneDemoOtp] = useState("");
   const [emailDemoOtp, setEmailDemoOtp] = useState("");
   const [recoveryIdentifier, setRecoveryIdentifier] = useState("");
   const [recoveryMaskedEmail, setRecoveryMaskedEmail] = useState("");
@@ -1124,7 +1123,6 @@ function App() {
     setRegistration(EMPTY_REGISTRATION);
     setRegistrationStep("details");
     setRegistrationId("");
-    setPhoneDemoOtp("");
     setEmailDemoOtp("");
     setAuthReturnTo(returnTo || "/orders");
     setAuthMode(mode);
@@ -1160,19 +1158,22 @@ function App() {
     setRegistration(EMPTY_REGISTRATION);
     setRegistrationStep("details");
     setRegistrationId("");
-    setPhoneDemoOtp("");
     setEmailDemoOtp("");
   }
 
-  async function requestPhoneOtp(details = registration) {
-    const response = await api.startPhoneRegistration({
+  async function beginRegistration(details = registration) {
+    const started = await api.startRegistration({
       name: details.name.trim(),
       phoneNumber: details.phoneNumber.trim(),
     });
-    setRegistrationId(response.registrationId);
-    setPhoneDemoOtp(response.debugPhoneOtp || "");
-    setRegistrationStep("phone");
-    showToast(response.message || "Phone verification code sent.");
+    setRegistrationId(started.registrationId);
+    const response = await api.sendRegistrationEmailOtp({
+      registrationId: started.registrationId,
+      email: details.email.trim(),
+    });
+    setEmailDemoOtp(response.debugEmailOtp || "");
+    setRegistrationStep("emailCode");
+    showToast(response.message || "Email verification code sent.");
   }
 
   async function requestEmailOtp() {
@@ -1183,17 +1184,6 @@ function App() {
     setEmailDemoOtp(response.debugEmailOtp || "");
     setRegistrationStep("emailCode");
     showToast(response.message || "Email verification code sent.");
-  }
-
-  async function resendPhoneOtp() {
-    setAuthBusy(true);
-    try {
-      await requestPhoneOtp();
-    } catch (error) {
-      showToast(error.message || "Could not resend the phone code.");
-    } finally {
-      setAuthBusy(false);
-    }
   }
 
   async function resendEmailOtp() {
@@ -1275,22 +1265,7 @@ function App() {
           confirmPassword: form.get("confirmPassword"),
         };
         setRegistration(details);
-        await requestPhoneOtp(details);
-        return;
-      }
-
-      if (registering && registrationStep === "phone") {
-        await api.verifyPhoneRegistration({
-          registrationId,
-          otpCode: form.get("otpCode").trim(),
-        });
-        setRegistrationStep("emailReady");
-        showToast("Phone verified. Next, verify your email.");
-        return;
-      }
-
-      if (registering && registrationStep === "emailReady") {
-        await requestEmailOtp();
+        await beginRegistration(details);
         return;
       }
 
@@ -1654,7 +1629,7 @@ function App() {
 
   return (
     <>
-      <div className="announcement"><span>{STATIC_PAGES_DEMO ? "GitHub Pages demo · changes are saved in this browser" : "Independent books, picked with care"}</span><span>{STATIC_PAGES_DEMO ? "No real SMS, courier, or payment is connected" : "Free delivery on orders over ₹999"}</span></div>
+      <div className="announcement"><span>{STATIC_PAGES_DEMO ? "GitHub Pages demo · changes are saved in this browser" : "Independent books, picked with care"}</span><span>{STATIC_PAGES_DEMO ? "Email verification is simulated · no live courier or payment is connected" : "Free delivery on orders over ₹999"}</span></div>
       <header className="site-header">
         <div className="header-brand-group">
           <button className="header-menu-button" type="button" aria-label="Open navigation menu" aria-expanded={navigationOpen} aria-controls="site-navigation-drawer" onClick={() => setNavigationOpen(true)}><span aria-hidden="true">☰</span></button>
@@ -1743,9 +1718,9 @@ function App() {
         <section className="dialog" aria-labelledby="auth-title">
           <div className="dialog-top"><BrandEmblem /><button className="close-button" onClick={closeAuth} aria-label="Close sign in">×</button></div>
           <span className="eyebrow">{authMode === "login" ? "WELCOME BACK" : authMode === "register" ? registrationStep === "details" ? "JOIN THE NEST" : "ACCOUNT VERIFICATION" : "ACCOUNT RECOVERY"}</span>
-          <h2 id="auth-title">{authMode === "login" ? "Good to see you." : authMode === "forgot" ? "Forgot your password?" : authMode === "reset" ? "Check your email." : registrationStep === "details" ? "Let’s make it official." : registrationStep === "phone" ? "Verify your phone." : registrationStep === "emailReady" ? "Verify your email." : "Enter your email code."}</h2>
-          <p className="dialog-intro">{authMode === "login" ? "Sign in to pick up where your last story left off." : authMode === "forgot" ? "Enter the email or mobile number on your account. We’ll send a one-time code to your registered email." : authMode === "reset" ? recoveryMaskedEmail ? `Enter the code sent to ${recoveryMaskedEmail}, then choose a new password.` : "If an account matches those details, a code was sent to its registered email. Enter it below to continue." : registrationStep === "details" ? "Create your account and make the shelves yours." : registrationStep === "phone" ? `Enter the 6-digit code for ${registration.phoneNumber}.` : registrationStep === "emailReady" ? `Your phone is verified. Send a code to ${registration.email} to finish creating your account.` : `Enter the 6-digit code sent to ${registration.email}.`}</p>
-          {authMode === "register" && <p className="step-copy">Step {registrationStep === "details" ? "1 of 3 · Your details" : registrationStep === "phone" ? "2 of 3 · Phone verification" : "3 of 3 · Email verification"}</p>}
+          <h2 id="auth-title">{authMode === "login" ? "Good to see you." : authMode === "forgot" ? "Forgot your password?" : authMode === "reset" ? "Check your email." : registrationStep === "details" ? "Let’s make it official." : "Enter your email code."}</h2>
+          <p className="dialog-intro">{authMode === "login" ? "Sign in to pick up where your last story left off." : authMode === "forgot" ? "Enter the email or mobile number on your account. We’ll send a one-time code to your registered email." : authMode === "reset" ? recoveryMaskedEmail ? `Enter the code sent to ${recoveryMaskedEmail}, then choose a new password.` : "If an account matches those details, a code was sent to its registered email. Enter it below to continue." : registrationStep === "details" ? "Create your account and make the shelves yours." : `Enter the 6-digit code sent to ${registration.email}.`}</p>
+          {authMode === "register" && <p className="step-copy">Step {registrationStep === "details" ? "1 of 2 · Your details" : "2 of 2 · Email verification"}</p>}
           <form className="dialog-form" onSubmit={submitAuthentication}>
             {authMode === "login" ? <>
               <label>Email or mobile number<input name="identifier" autoComplete="username" required /></label>
@@ -1755,7 +1730,7 @@ function App() {
               <p className="identity-note">Demo admin: admin@msrbooknest.demo · AdminDemo@123</p>
               <button className="button button-dark button-full" type="submit" disabled={authBusy}>{authBusy ? "Signing in…" : "Sign in"}</button>
               <p className="auth-switch">New to msrbooknest? <button type="button" onClick={() => switchAuthMode("register")}>Create an account</button></p>
-              <p className="identity-note">{STATIC_PAGES_DEMO ? "Public browser demo: account, cart, orders, and buyback data stay in this browser. No real SMS or payments are sent." : "Login uses Spring Security and a signed demo JWT."}</p>
+              <p className="identity-note">{STATIC_PAGES_DEMO ? "Public browser demo: account, cart, orders, and buyback data stay in this browser. Email verification is simulated; no payments are sent." : "Login uses Spring Security and a signed demo JWT."}</p>
             </> : authMode === "forgot" ? <>
               <label>Email or mobile number<input name="identifier" autoComplete="username" defaultValue={recoveryIdentifier} required /></label>
               <p className="identity-note">For your security, we only send the code to the email already saved on your account.</p>
@@ -1776,21 +1751,11 @@ function App() {
               <label>Mobile number<input name="phoneNumber" type="tel" autoComplete="tel" placeholder="10 digit Indian mobile" value={registration.phoneNumber} onChange={(event) => setRegistration({ ...registration, phoneNumber: event.target.value })} required /></label>
               <label>Password<input name="password" type="password" autoComplete="new-password" minLength={10} pattern=".*[^A-Za-z0-9].*" title="At least 10 characters, including one special character" value={registration.password} onChange={(event) => setRegistration({ ...registration, password: event.target.value })} required /></label>
               <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={10} pattern=".*[^A-Za-z0-9].*" value={registration.confirmPassword} onChange={(event) => setRegistration({ ...registration, confirmPassword: event.target.value })} required /></label>
-              <p className="identity-note">For this demo, phone and email codes are displayed here. Passwords need at least 10 characters and one special character.</p>
-              <button className="button button-dark button-full" type="submit" disabled={authBusy}>{authBusy ? "Sending code…" : "Send phone verification code"}</button>
-              <p className="auth-switch">Already have an account? <button type="button" onClick={() => switchAuthMode("login")}>Sign in</button></p>
-            </> : registrationStep === "phone" ? <>
-              {phoneDemoOtp && <div className="demo-otp" role="status"><span>Demo phone code</span><strong>{phoneDemoOtp}</strong><small>SMS delivery is simulated for this demo.</small></div>}
-              <label>Phone verification code<input name="otpCode" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit code" required /></label>
-              <button className="button button-dark button-full" type="submit" disabled={authBusy}>{authBusy ? "Verifying…" : "Verify phone"}</button>
-              <button className="text-link auth-resend" type="button" onClick={resendPhoneOtp} disabled={authBusy}>{authBusy ? "Please wait…" : "Resend phone code"}</button>
-              <button className="continue-link back-step" type="button" onClick={() => switchAuthMode("login")}>Cancel signup</button>
-            </> : registrationStep === "emailReady" ? <>
-              <p className="step-copy">Phone verification complete. Send the email code when you’re ready.</p>
+              <p className="identity-note">We’ll verify your email with a 6-digit code. Phone numbers are used for sign-in; no SMS code is needed. Passwords need at least 10 characters and one special character.</p>
               <button className="button button-dark button-full" type="submit" disabled={authBusy}>{authBusy ? "Sending code…" : "Send email verification code"}</button>
-              <button className="continue-link back-step" type="button" onClick={() => switchAuthMode("login")}>Cancel signup</button>
+              <p className="auth-switch">Already have an account? <button type="button" onClick={() => switchAuthMode("login")}>Sign in</button></p>
             </> : <>
-              {emailDemoOtp && <div className="demo-otp" role="status"><span>Demo email code</span><strong>{emailDemoOtp}</strong><small>Email delivery is simulated for this demo.</small></div>}
+              {emailDemoOtp && <div className="demo-otp" role="status"><span>Demo email code</span><strong>{emailDemoOtp}</strong><small>Email delivery is simulated in this free demo.</small></div>}
               <label>Email verification code<input name="emailOtpCode" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit code" required /></label>
               <p className="identity-note">This code expires in 10 minutes.</p>
               <button className="button button-dark button-full" type="submit" disabled={authBusy}>{authBusy ? "Creating account…" : "Verify email and create account"}</button>

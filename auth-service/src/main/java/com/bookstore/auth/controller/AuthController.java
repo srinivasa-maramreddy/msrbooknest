@@ -8,8 +8,7 @@ import com.bookstore.auth.dto.PasswordRecoveryResponse;
 import com.bookstore.auth.dto.PasswordResetRequest;
 import com.bookstore.auth.dto.RegisterCompleteRequest;
 import com.bookstore.auth.dto.RegisterEmailOtpRequest;
-import com.bookstore.auth.dto.RegisterPhoneStartRequest;
-import com.bookstore.auth.dto.RegisterPhoneVerifyRequest;
+import com.bookstore.auth.dto.RegisterStartRequest;
 import com.bookstore.auth.dto.RegistrationStepResponse;
 import com.bookstore.auth.service.AuthService;
 import jakarta.validation.Valid;
@@ -28,20 +27,10 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @PostMapping("/register/phone/start")
-    public ResponseEntity<?> startPhoneRegistration(@Valid @RequestBody RegisterPhoneStartRequest request) {
+    @PostMapping("/register/start")
+    public ResponseEntity<?> startRegistration(@Valid @RequestBody RegisterStartRequest request) {
         try {
-            RegistrationStepResponse response = authService.startPhoneRegistration(request);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException ex) {
-            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
-        }
-    }
-
-    @PostMapping("/register/phone/verify")
-    public ResponseEntity<?> verifyPhoneRegistration(@Valid @RequestBody RegisterPhoneVerifyRequest request) {
-        try {
-            RegistrationStepResponse response = authService.verifyPhoneRegistration(request);
+            RegistrationStepResponse response = authService.startRegistration(request);
             return ResponseEntity.ok(response);
         } catch (RuntimeException ex) {
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));

@@ -45,7 +45,7 @@ Use the gateway's actual Render URL and omit a trailing slash. Then open **Actio
 
 ## Demo behavior and limits
 
-- Email and SMS OTP delivery remain disabled; this demo displays development OTP codes.
+- Email delivery remains disabled; this demo displays email OTP codes. SMS OTP is not used.
 - Razorpay live payments remain disabled. Checkout uses the mock NPCI simulator.
 - Free Render services sleep while idle, and Render may suspend services if the shared free-hour or usage limits are reached.
 - Aiven's free MySQL has 1 GB of storage. Its free Kafka tier has five topics, two partitions per topic, capped throughput, and limited retention.

@@ -59,17 +59,12 @@ function render() {
       onClose: () => toggleCart(false),
       onRemove: removeFromCart,
       onSetAuthMode: setAuthMode,
-      onLogin: async (email, password, verificationChannel, phoneNumber) => {
-        if (verificationChannel === "PHONE" && !phoneNumber.trim()) {
-          showToast("Phone number is required for PHONE OTP login");
-          return;
-        }
-
+      onLogin: async (email, password, verificationChannel) => {
         try {
           const response = await login(email, password, verificationChannel);
           setPendingVerification({
             verificationChannel,
-            destination: verificationChannel === "PHONE" ? (phoneNumber || "") : email,
+            destination: email,
             purpose: response.purpose || "LOGIN"
           });
           setAuthMode("VERIFY");
@@ -83,7 +78,7 @@ function render() {
           const response = await registerCustomer(payload);
           setPendingVerification({
             verificationChannel: payload.verificationChannel,
-            destination: payload.verificationChannel === "EMAIL" ? payload.email : payload.phoneNumber,
+            destination: payload.email,
             purpose: response.purpose || "REGISTRATION"
           });
           setAuthMode("VERIFY");

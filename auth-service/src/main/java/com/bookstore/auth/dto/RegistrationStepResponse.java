@@ -5,8 +5,6 @@ public class RegistrationStepResponse {
     private String registrationId;
     private String maskedPhone;
     private String maskedEmail;
-    private boolean phoneVerified;
-    private String debugPhoneOtp;
     private String debugEmailOtp;
 
     public RegistrationStepResponse(
@@ -14,16 +12,12 @@ public class RegistrationStepResponse {
             String registrationId,
             String maskedPhone,
             String maskedEmail,
-            boolean phoneVerified,
-            String debugPhoneOtp,
             String debugEmailOtp
     ) {
         this.message = message;
         this.registrationId = registrationId;
         this.maskedPhone = maskedPhone;
         this.maskedEmail = maskedEmail;
-        this.phoneVerified = phoneVerified;
-        this.debugPhoneOtp = debugPhoneOtp;
         this.debugEmailOtp = debugEmailOtp;
     }
 
@@ -41,14 +35,6 @@ public class RegistrationStepResponse {
 
     public String getMaskedEmail() {
         return maskedEmail;
-    }
-
-    public boolean isPhoneVerified() {
-        return phoneVerified;
-    }
-
-    public String getDebugPhoneOtp() {
-        return debugPhoneOtp;
     }
 
     public String getDebugEmailOtp() {

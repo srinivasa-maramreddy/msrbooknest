@@ -66,9 +66,7 @@ const state = {
   mode: "login",
   registerStep: 1,
   registrationId: "",
-  phoneOtpSent: false,
   emailOtpSent: false,
-  phoneVerified: false,
   token: localStorage.getItem(STORAGE_KEYS.token) || "",
   user: readJsonFromStorage(STORAGE_KEYS.user, null),
   books: [],
@@ -139,7 +137,6 @@ function cacheElements() {
     authEmail: document.getElementById("authEmail"),
     authPhone: document.getElementById("authPhone"),
     authEmailOtp: document.getElementById("authEmailOtp"),
-    authPhoneOtp: document.getElementById("authPhoneOtp"),
     authPassword: document.getElementById("authPassword"),
     authConfirmPassword: document.getElementById("authConfirmPassword"),
     registerStepHint: document.getElementById("registerStepHint"),
@@ -148,7 +145,6 @@ function cacheElements() {
     emailFieldWrap: document.getElementById("emailFieldWrap"),
     phoneFieldWrap: document.getElementById("phoneFieldWrap"),
     emailOtpFieldWrap: document.getElementById("emailOtpFieldWrap"),
-    phoneOtpFieldWrap: document.getElementById("phoneOtpFieldWrap"),
     passwordFieldWrap: document.getElementById("passwordFieldWrap"),
     confirmPasswordFieldWrap: document.getElementById("confirmPasswordFieldWrap"),
 
@@ -866,17 +862,16 @@ function setAuthMode(mode) {
   el.identifierFieldWrap.classList.toggle("hidden", !isLogin);
   el.nameFieldWrap.classList.toggle("hidden", !isRegisterStep1);
   el.phoneFieldWrap.classList.toggle("hidden", !isRegisterStep1);
-  el.phoneOtpFieldWrap.classList.toggle("hidden", !isRegisterStep1);
 
   el.emailFieldWrap.classList.toggle("hidden", !isRegisterStep2);
   el.emailOtpFieldWrap.classList.toggle("hidden", !isRegisterStep2);
   el.passwordFieldWrap.classList.toggle("hidden", !(isLogin || isRegisterStep2));
   el.confirmPasswordFieldWrap.classList.toggle("hidden", !isRegisterStep2);
-  el.resendOtpBtn.classList.toggle("hidden", !isRegister);
+  el.resendOtpBtn.classList.toggle("hidden", !isRegisterStep2);
 
   el.registerStepHint.classList.toggle("hidden", !isRegister);
   if (isRegisterStep1) {
-    el.registerStepHint.textContent = "Step 1 of 2: Full Name, Phone, Phone OTP";
+    el.registerStepHint.textContent = "Step 1 of 2: Full Name and Phone";
   } else if (isRegisterStep2) {
     el.registerStepHint.textContent = "Step 2 of 2: Email, Email OTP, Password, Confirm Password";
   }
@@ -884,8 +879,7 @@ function setAuthMode(mode) {
   if (isLogin) {
     el.authSubmitBtn.textContent = "Sign In";
   } else if (isRegisterStep1) {
-    el.authSubmitBtn.textContent = "Verify Phone & Continue";
-    el.resendOtpBtn.textContent = state.phoneOtpSent ? "Resend Phone OTP" : "Send Phone OTP";
+    el.authSubmitBtn.textContent = "Continue to email verification";
   } else {
     el.authSubmitBtn.textContent = "Create Account";
     el.resendOtpBtn.textContent = state.emailOtpSent ? "Resend Email OTP" : "Send Email OTP";
@@ -895,9 +889,7 @@ function setAuthMode(mode) {
 function resetRegistrationFlow(clearInputs) {
   state.registerStep = 1;
   state.registrationId = "";
-  state.phoneOtpSent = false;
   state.emailOtpSent = false;
-  state.phoneVerified = false;
 
   if (!clearInputs) {
     return;
@@ -905,7 +897,6 @@ function resetRegistrationFlow(clearInputs) {
 
   el.authName.value = "";
   el.authPhone.value = "";
-  el.authPhoneOtp.value = "";
   el.authEmail.value = "";
   el.authEmailOtp.value = "";
   el.authPassword.value = "";
@@ -937,7 +928,7 @@ function normalizePhoneOrNull(value) {
   return normalized || null;
 }
 
-async function sendPhoneOtp() {
+async function startRegistration() {
   const name = el.authName.value.trim();
   const phoneNumber = normalizePhoneOrNull(el.authPhone.value.trim());
 
@@ -951,49 +942,21 @@ async function sendPhoneOtp() {
     return;
   }
 
-  const response = await authPost("/register/phone/start", {
+  const response = await authPost("/register/start", {
     name,
     phoneNumber,
   });
 
   state.registrationId = response.registrationId || "";
-  state.phoneOtpSent = true;
-  state.phoneVerified = false;
   state.emailOtpSent = false;
-  state.registerStep = 1;
-  if (response.debugPhoneOtp) {
-    el.authPhoneOtp.value = response.debugPhoneOtp;
-  }
-  setAuthMode("register");
-  showToast(response.message || "Phone OTP sent");
-}
-
-async function verifyPhoneAndContinue() {
-  if (!state.registrationId) {
-    showToast("Send phone OTP first", "error");
-    return;
-  }
-
-  const phoneOtpCode = el.authPhoneOtp.value.trim();
-  if (!phoneOtpCode) {
-    showToast("Phone OTP is required", "error");
-    return;
-  }
-
-  const response = await authPost("/register/phone/verify", {
-    registrationId: state.registrationId,
-    otpCode: phoneOtpCode,
-  });
-
-  state.phoneVerified = true;
   state.registerStep = 2;
   setAuthMode("register");
-  showToast(response.message || "Phone verified");
+  showToast(response.message || "Details saved. Continue with email verification.");
 }
 
 async function sendEmailOtp() {
-  if (!state.registrationId || !state.phoneVerified || state.registerStep !== 2) {
-    showToast("Verify phone OTP first", "error");
+  if (!state.registrationId || state.registerStep !== 2) {
+    showToast("Complete your details first", "error");
     return;
   }
 
@@ -1031,7 +994,7 @@ async function loginWithPassword() {
 
 async function completeRegistration() {
   if (!state.registrationId || state.registerStep !== 2) {
-    showToast("Complete phone step first", "error");
+    showToast("Complete your details first", "error");
     return;
   }
 
@@ -1064,11 +1027,7 @@ async function onAuthSubmit(event) {
   try {
     if (state.mode === "register") {
       if (state.registerStep === 1) {
-        if (!state.registrationId) {
-          await sendPhoneOtp();
-          return;
-        }
-        await verifyPhoneAndContinue();
+        await startRegistration();
       } else {
         await completeRegistration();
       }
@@ -1087,10 +1046,6 @@ async function onResendOtp() {
   }
 
   try {
-    if (state.registerStep === 1) {
-      await sendPhoneOtp();
-      return;
-    }
     await sendEmailOtp();
   } catch (error) {
     showToast(error.message || "Could not send OTP", "error");

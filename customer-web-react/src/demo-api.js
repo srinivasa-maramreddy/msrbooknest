@@ -287,23 +287,15 @@ export const demoApi = {
     return sessionFor(user);
   },
 
-  async startPhoneRegistration(payload) {
-    const pending = { ...payload, registrationId: makeId("REG"), phoneVerified: false };
+  async startRegistration(payload) {
+    const pending = { ...payload, registrationId: makeId("REG") };
     write(PENDING_KEY, pending);
-    return { registrationId: pending.registrationId, debugPhoneOtp: DEMO_OTP, message: "Demo phone code generated in this page." };
-  },
-
-  async verifyPhoneRegistration({ registrationId, otpCode }) {
-    const pending = read(PENDING_KEY, null);
-    if (!pending || pending.registrationId !== registrationId || otpCode !== DEMO_OTP) throw new Error(`Use the displayed demo code ${DEMO_OTP}.`);
-    pending.phoneVerified = true;
-    write(PENDING_KEY, pending);
-    return { message: "Demo phone verification complete." };
+    return { registrationId: pending.registrationId, message: "Details saved. Verify your email to continue." };
   },
 
   async sendRegistrationEmailOtp({ registrationId, email }) {
     const pending = read(PENDING_KEY, null);
-    if (!pending || pending.registrationId !== registrationId || !pending.phoneVerified) throw new Error("Verify the phone step first.");
+    if (!pending || pending.registrationId !== registrationId) throw new Error("Start signup first.");
     pending.email = String(email || "").trim().toLowerCase();
     write(PENDING_KEY, pending);
     return { debugEmailOtp: DEMO_OTP, message: "Demo email code generated in this page." };
@@ -311,7 +303,7 @@ export const demoApi = {
 
   async completeOtpRegistration({ registrationId, email, emailOtpCode, password, confirmPassword }) {
     const pending = read(PENDING_KEY, null);
-    if (!pending || pending.registrationId !== registrationId || !pending.phoneVerified) throw new Error("Restart demo registration and verify your phone.");
+    if (!pending || pending.registrationId !== registrationId) throw new Error("Restart signup and request an email code.");
     if (emailOtpCode !== DEMO_OTP) throw new Error(`Use the displayed demo code ${DEMO_OTP}.`);
     if (pending.email !== String(email || "").trim().toLowerCase()) throw new Error("The email does not match the verified demo address.");
     if (password !== confirmPassword) throw new Error("Passwords do not match.");

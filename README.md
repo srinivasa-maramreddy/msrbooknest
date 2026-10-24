@@ -70,4 +70,4 @@ The Order service checks the signed-in customer's cart, gets authoritative price
 
 ## Demo security note
 
-Compose defaults, local demo accounts, OTP display, database credentials, and the JWT signing key are for a laptop demo only. Do not expose this stack publicly with its defaults. Replace demo secrets, configure real email/SMS delivery, add a managed identity/key strategy, and integrate a certified payment provider before any production deployment.
+Compose defaults, local demo accounts, OTP display, database credentials, and the JWT signing key are for a laptop demo only. Do not expose this stack publicly with its defaults. Replace demo secrets, configure real email delivery, add a managed identity/key strategy, and integrate a certified payment provider before any production deployment. OTP verification uses email only; mobile numbers remain available for account sign-in.

@@ -3,14 +3,28 @@
     "_postman_id": "2f0f8d38-67b8-4b98-8d4c-2d1f58db4a8a",
     "name": "Bookstore Microservices OTP",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Dual OTP registration and OTP login for bookstore-microservices."
+    "description": "Email OTP registration and password login for bookstore-microservices."
   },
   "item": [
     {
       "name": "1. Auth",
       "item": [
         {
-          "name": "Register (Send Email + Phone OTP)",
+          "name": "Start Registration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.registrationId) pm.environment.set('registrationId', body.registrationId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -21,24 +35,55 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{fullName}}\",\n  \"email\": \"{{email}}\",\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\",\n  \"role\": \"CUSTOMER\"\n}"
+              "raw": "{\n  \"name\": \"{{fullName}}\",\n  \"phoneNumber\": \"{{phoneNumber}}\"\n}"
             },
             "url": {
-              "raw": "{{baseUrlAuth}}/api/auth/register",
+              "raw": "{{baseUrlAuth}}/api/auth/register/start",
               "host": [
                 "{{baseUrlAuth}}"
               ],
               "path": [
                 "api",
                 "auth",
-                "register"
+                "register",
+                "start"
               ]
             }
           },
           "response": []
         },
         {
-          "name": "Verify Registration (Both OTP)",
+          "name": "Send Registration Email OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationId\": \"{{registrationId}}\",\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrlAuth}}/api/auth/register/email/send-otp",
+              "host": [
+                "{{baseUrlAuth}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register",
+                "email",
+                "send-otp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Registration",
           "event": [
             {
               "listen": "test",
@@ -64,24 +109,25 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"emailOtpCode\": \"{{emailOtpCode}}\",\n  \"phoneOtpCode\": \"{{phoneOtpCode}}\"\n}"
+              "raw": "{\n  \"registrationId\": \"{{registrationId}}\",\n  \"email\": \"{{email}}\",\n  \"emailOtpCode\": \"{{emailOtpCode}}\",\n  \"password\": \"{{password}}\",\n  \"confirmPassword\": \"{{password}}\"\n}"
             },
             "url": {
-              "raw": "{{baseUrlAuth}}/api/auth/verify-registration",
+              "raw": "{{baseUrlAuth}}/api/auth/register/complete",
               "host": [
                 "{{baseUrlAuth}}"
               ],
               "path": [
                 "api",
                 "auth",
-                "verify-registration"
+                "register",
+                "complete"
               ]
             }
           },
           "response": []
         },
         {
-          "name": "Login Request OTP (Email/Phone)",
+          "name": "Login (Email or Mobile + Password)",
           "request": {
             "method": "POST",
             "header": [
@@ -92,62 +138,17 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"identifier\": \"{{identifier}}\"\n}"
+              "raw": "{\n  \"identifier\": \"{{identifier}}\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": {
-              "raw": "{{baseUrlAuth}}/api/auth/login/request-otp",
+              "raw": "{{baseUrlAuth}}/api/auth/login",
               "host": [
                 "{{baseUrlAuth}}"
               ],
               "path": [
                 "api",
                 "auth",
-                "login",
-                "request-otp"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Login Verify OTP",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.token) pm.environment.set('token', body.token);",
-                  "  if (body.loginId) pm.environment.set('identifier', body.loginId);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"identifier\": \"{{identifier}}\",\n  \"otpCode\": \"{{loginOtpCode}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrlAuth}}/api/auth/login/verify-otp",
-              "host": [
-                "{{baseUrlAuth}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "login",
-                "verify-otp"
+                "login"
               ]
             }
           },

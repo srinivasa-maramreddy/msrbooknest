@@ -23,6 +23,7 @@ public class RegistrationSession {
     @Column(nullable = false, length = 20)
     private String phoneNumber;
 
+    // Legacy database columns retained for existing auth_db schemas; registration no longer uses phone OTP.
     @Column(length = 255)
     private String phoneOtpHash;
 

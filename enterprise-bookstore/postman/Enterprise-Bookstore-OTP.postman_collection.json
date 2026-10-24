@@ -33,7 +33,7 @@
                 "register"
               ]
             },
-            "description": "Sends OTP to email or phone based on verificationChannel."
+            "description": "Sends the registration OTP to the email address."
           },
           "event": [
             {
@@ -45,12 +45,8 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "const channel = pm.environment.get('verificationChannel');",
-                  "if (channel === 'PHONE') {",
-                  "    pm.environment.set('otpDestination', pm.environment.get('phoneNumber'));",
-                  "} else {",
-                  "    pm.environment.set('otpDestination', pm.environment.get('email'));",
-                  "}",
+                  "pm.environment.set('verificationChannel', 'EMAIL');",
+                  "pm.environment.set('otpDestination', pm.environment.get('email'));",
                   "",
                   "const data = pm.response.json();",
                   "if (data.verificationChannel) {",
@@ -85,7 +81,7 @@
                 "verify-otp"
               ]
             },
-            "description": "Use OTP from email or backend log."
+              "description": "Use the email OTP code."
           },
           "event": [
             {
@@ -169,12 +165,8 @@
                   "pm.test('status is 200', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "const channel = pm.environment.get('loginVerificationChannel') || 'EMAIL';",
-                  "if (channel === 'PHONE') {",
-                  "    pm.environment.set('otpDestination', pm.environment.get('phoneNumber'));",
-                  "} else {",
-                  "    pm.environment.set('otpDestination', pm.environment.get('email'));",
-                  "}"
+                  "pm.environment.set('loginVerificationChannel', 'EMAIL');",
+                  "pm.environment.set('otpDestination', pm.environment.get('email'));"
                 ]
               }
             }
