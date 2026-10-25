@@ -1,0 +1,116 @@
+services:
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: auth-service
+    restart: unless-stopped
+    environment:
+      PORT: "8081"
+      MYSQL_HOST: $MYSQL_HOST
+      MYSQL_PORT: $MYSQL_PORT
+      MYSQL_DATABASE: auth_db
+      MYSQL_USERNAME: $MYSQL_USERNAME
+      MYSQL_PASSWORD: $MYSQL_PASSWORD
+      MYSQL_SSL_MODE: $MYSQL_SSL_MODE
+      APP_JWT_SECRET: $APP_JWT_SECRET
+      APP_WEB_ORIGINS: $APP_WEB_ORIGINS
+      APP_DEMO_SEED_USERS: "false"
+      APP_EMAIL_OTP_ENABLED: $APP_EMAIL_OTP_ENABLED
+      GMAIL_SENDER_EMAIL: $GMAIL_SENDER_EMAIL
+      GMAIL_OAUTH_CLIENT_ID: $GMAIL_OAUTH_CLIENT_ID
+      GMAIL_OAUTH_CLIENT_SECRET: $GMAIL_OAUTH_CLIENT_SECRET
+      GMAIL_OAUTH_REFRESH_TOKEN: $GMAIL_OAUTH_REFRESH_TOKEN
+      APP_HEALTH_MAIL_ENABLED: "false"
+      SPRING_JPA_SHOW_SQL: "false"
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -Xss512k"
+    mem_limit: 384m
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: catalog-service
+    restart: unless-stopped
+    ports:
+      - "$NODE1_PRIVATE_IP:8082:8082"
+    environment:
+      PORT: "8082"
+      MYSQL_HOST: $MYSQL_HOST
+      MYSQL_PORT: $MYSQL_PORT
+      MYSQL_DATABASE: catalog_db
+      MYSQL_USERNAME: $MYSQL_USERNAME
+      MYSQL_PASSWORD: $MYSQL_PASSWORD
+      MYSQL_SSL_MODE: $MYSQL_SSL_MODE
+      KAFKA_BOOTSTRAP_SERVERS: "$NODE2_PRIVATE_IP:9092"
+      APP_JWT_SECRET: $APP_JWT_SECRET
+      APP_WEB_ORIGINS: $APP_WEB_ORIGINS
+      ORDER_SERVICE_BASE_URL: "http://$NODE2_PRIVATE_IP:8083"
+      SPRING_JPA_SHOW_SQL: "false"
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -Xss512k"
+    mem_limit: 384m
+
+  cart-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: cart-service
+    restart: unless-stopped
+    ports:
+      - "$NODE1_PRIVATE_IP:8084:8084"
+    environment:
+      PORT: "8084"
+      MYSQL_HOST: $MYSQL_HOST
+      MYSQL_PORT: $MYSQL_PORT
+      MYSQL_DATABASE: cart_db
+      MYSQL_USERNAME: $MYSQL_USERNAME
+      MYSQL_PASSWORD: $MYSQL_PASSWORD
+      MYSQL_SSL_MODE: $MYSQL_SSL_MODE
+      APP_JWT_SECRET: $APP_JWT_SECRET
+      APP_WEB_ORIGINS: $APP_WEB_ORIGINS
+      CATALOG_SERVICE_BASE_URL: "http://catalog-service:8082"
+      SPRING_JPA_SHOW_SQL: "false"
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -Xss512k"
+    depends_on:
+      - catalog-service
+    mem_limit: 384m
+
+  api-gateway:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    environment:
+      NODE2_PRIVATE_IP: $NODE2_PRIVATE_IP
+      NGINX_ENVSUBST_FILTER: "^NODE2_PRIVATE_IP$"
+    volumes:
+      - ./infra/lightsail/nginx.split.conf.template:/etc/nginx/templates/default.conf.template:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - auth-service
+      - catalog-service
+      - cart-service
+    mem_limit: 96m
+
+  https-proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: $API_DOMAIN
+    volumes:
+      - ./infra/lightsail/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    depends_on:
+      - api-gateway
+    mem_limit: 96m
+
+volumes:
+  caddy_data:
+  caddy_config:

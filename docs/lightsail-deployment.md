@@ -1,65 +1,84 @@
 # Deploy MSRBookNest to Lightsail
 
-This deployment keeps the React storefront on GitHub Pages and runs the six Spring Boot services, MySQL, Kafka, and an HTTPS API gateway on one Lightsail instance. It is sized for the $44/month Linux bundle (2 vCPUs, 8 GB RAM, 160 GB SSD). AWS prices and network transfer allowances vary by region; confirm the selected bundle in the Lightsail console.
+This guide matches the current two-instance Mumbai setup. The React storefront remains on GitHub Pages. The backend runs in Docker across two Lightsail instances and connects to one Lightsail managed MySQL database.
 
-## 1. Create the Lightsail server
+## Current layout
 
-In Lightsail, choose:
+| Resource | Placement | Services |
+| --- | --- | --- |
+| `msrbooknest-node-1` | Mumbai, 2 GB RAM | API gateway, HTTPS proxy, auth, catalog, cart |
+| `msrbooknest-node-2` | Mumbai, 2 GB RAM | Kafka, order, payment, buyback |
+| Lightsail managed MySQL | Mumbai | Six service schemas: `auth_db`, `catalog_db`, `cart_db`, `order_db`, `payment_db`, `buyback_db` |
 
-- Region: Singapore, to match the current backend region.
-- Platform: Linux/Unix.
-- Bundle: 8 GB RAM, 2 vCPUs, 160 GB SSD (listed at $44/month).
-- Operating system: Ubuntu 24.04 LTS.
+The repository has a separate Compose file for each instance: `docker-compose.lightsail.node1.yml` and `docker-compose.lightsail.node2.yml`. Both use `.env.lightsail` for the shared configuration. Do not use the local-demo `docker-compose.yml` or the old single-server `docker-compose.lightsail.yml` for this two-server setup; those start their own MySQL and Kafka containers.
 
-After it is running, attach a static IPv4 address. In Networking, allow inbound TCP 22 only from your IP, and TCP 80 and 443 from all addresses. Do not open ports 3306, 9092, or the Spring service ports publicly.
+The only managed database is `Database-1` in Mumbai. It is now **Available**: MySQL 8.4.11, 1 GB RAM, 2 vCPUs, and 40 GB SSD. Public access is disabled, so only Lightsail resources in the same region can connect. The local ignored `.env.lightsail` has its endpoint, port, and master username filled in; set its database password before copying it to either server. The Compose configuration points all six services at that shared database and requires TLS (`MYSQL_SSL_MODE=REQUIRED`). Do not create another database.
 
-## 2. Point an API hostname at the server
+## 1. Prepare networking
 
-Create an `A` record such as `api.your-domain.example` pointing to the Lightsail static IPv4 address. HTTPS from the GitHub Pages site requires a DNS name; Caddy will request and renew the TLS certificate automatically once DNS resolves to the server and ports 80 and 443 are reachable.
+Attach a static IPv4 address to node 1 and point an API hostname, such as `api.your-domain.example`, at it. The HTTPS proxy on node 1 obtains a certificate automatically after DNS resolves and inbound ports 80 and 443 are open.
 
-## 3. Install Docker and check out the repository
+In the Lightsail networking firewall, allow:
 
-Connect to Ubuntu over SSH and install Docker Engine with the official Docker Ubuntu instructions. Then clone the repository and enter its directory:
+- Node 1: TCP 80 and 443 from the internet; TCP 22 only from your admin IP; TCP 8082 and 8084 from node 2's private address.
+- Node 2: TCP 22 only from your admin IP; TCP 8083, 8085, 8086, and 9092 from node 1's private address.
+
+Keep database port 3306 and all service/Kafka ports closed to the public internet. Configure the managed database for private Lightsail connectivity if available, and keep it in Mumbai. Do not publish node 1's port 8080 publicly; Caddy forwards HTTPS traffic to it inside Docker.
+
+## 2. Install Docker on both instances
+
+Install Docker Engine and the Docker Compose plugin on each Ubuntu instance. Clone the same repository on both:
 
 ```bash
 git clone https://github.com/srinivasa-maramreddy/msrbooknest.git
 cd msrbooknest
 ```
 
-## 4. Set deployment secrets
+## 3. Configure shared settings
 
-Copy `.env.lightsail.example` to `.env.lightsail`. Set `API_DOMAIN` to the DNS name from step 2, and replace the JWT and MySQL passwords with long, unique random values. Keep this file on the server only; it is ignored by Git.
-
-To enable real email OTP, set `APP_EMAIL_OTP_ENABLED=true` and fill in the Gmail sender address and OAuth client ID, client secret, and refresh token. Otherwise leave OTP disabled until those values are ready. Payment stays in mock mode; this compose file does not enable live Razorpay payments.
-
-## 5. Start the stack
-
-Run from the repository root:
+On each instance, copy `.env.lightsail.split.example` to `.env.lightsail` and edit the copy. Set the two private IP values to the current addresses shown on the Lightsail instance details pages. Use the same values in both files:
 
 ```bash
-docker compose --parallel 1 --env-file .env.lightsail -f docker-compose.yml -f docker-compose.lightsail.yml up -d --build
+cp .env.lightsail.split.example .env.lightsail
 ```
 
-The profile override keeps the React container off. MySQL and Kafka data use persistent Docker volumes. On the first boot, allow several minutes for the Java services to initialize.
+Update `API_DOMAIN` to the hostname from step 1. After `Database-1` is **Available**, replace the MySQL placeholders with its connection details. Generate a long random `APP_JWT_SECRET`; do not reuse the sample text or commit the filled `.env.lightsail` file.
 
-Check container status and logs:
+Leave email OTP disabled unless the Gmail OAuth sender settings are fully configured. Payments stay in mock mode. The checked-in environment example contains no passwords or OAuth secrets.
+
+## 4. Start node 2 first
+
+On `msrbooknest-node-2`, start Kafka and its three services:
 
 ```bash
-docker compose --env-file .env.lightsail -f docker-compose.yml -f docker-compose.lightsail.yml ps
-docker compose --env-file .env.lightsail -f docker-compose.yml -f docker-compose.lightsail.yml logs -f api-gateway auth-service catalog-service
+docker compose --parallel 1 --env-file .env.lightsail -f docker-compose.lightsail.node2.yml up -d --build
+docker compose --env-file .env.lightsail -f docker-compose.lightsail.node2.yml ps
 ```
 
-When the DNS record is active, verify `https://<API_DOMAIN>/` reports the gateway as healthy and `https://<API_DOMAIN>/health/catalog` reports the catalog health. The other health routes are `/health/auth`, `/health/cart`, `/health/orders`, `/health/payments`, and `/health/buyback`.
+Kafka advertises its private listener to the three containers on node 2 and its private IP listener to catalog on node 1. No public Kafka endpoint is configured.
 
-## 6. Connect the GitHub Pages storefront
+## 5. Start node 1
 
-In the GitHub repository, open **Settings → Secrets and variables → Actions → Variables** and set both variables to the HTTPS API hostname:
+On `msrbooknest-node-1`, start auth, catalog, cart, the API gateway, and HTTPS proxy:
+
+```bash
+docker compose --parallel 1 --env-file .env.lightsail -f docker-compose.lightsail.node1.yml up -d --build
+docker compose --env-file .env.lightsail -f docker-compose.lightsail.node1.yml ps
+```
+
+The gateway sends auth, catalog, and cart traffic to containers on node 1 and sends orders, payments, and buybacks to node 2 over its private IP. Order service calls catalog and cart back over node 1's private IP.
+
+## 6. Check health and connect GitHub Pages
+
+After DNS and TLS are ready, check `https://<API_DOMAIN>/` and these health paths:
+
+`/health/auth`, `/health/catalog`, `/health/cart`, `/health/orders`, `/health/payments`, and `/health/buyback`.
+
+Set these GitHub Actions repository variables to the same HTTPS API origin, then rerun the **Deploy msrbooknest to GitHub Pages** workflow:
 
 - `VITE_BACKEND_BASE_URL` = `https://<API_DOMAIN>`
 - `VITE_AUTH_API_BASE_URL` = `https://<API_DOMAIN>`
 
-Then run the **Deploy msrbooknest to GitHub Pages** workflow. The Pages build will use the Lightsail API gateway for all six services.
+## Capacity note
 
-## Capacity and operations
-
-The compose override assigns bounded memory to Java, Kafka, and MySQL for this 8 GB instance. It is intended for the small recruiter demo, not high availability or production traffic. Keep a Lightsail snapshot before major changes and monitor memory and disk usage after the first demo sessions.
+These are 2 GB instances. The Compose files set small JVM and Kafka memory limits for a recruiter demo. Build and start the services sequentially as shown, then monitor memory and container restarts during startup. This is a low-cost demo layout, not a highly available production design; either instance or Kafka going down can interrupt application functions.
