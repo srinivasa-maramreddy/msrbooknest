@@ -8,6 +8,7 @@ const warmupTimeoutMs = 300_000;
 const warmupRequestTimeoutMs = 8_000;
 const warmupRetryDelayMs = [1_000, 2_000, 4_000, 8_000, 12_000, 15_000];
 const directHealthUrls = {
+  auth: `${hostedBackend}/health/auth`,
   catalog: "https://msrbooknest-srinivas-catalog.onrender.com/actuator/health",
   cart: "https://msrbooknest-srinivas-cart.onrender.com/actuator/health",
   orders: "https://msrbooknest-srinivas-orders.onrender.com/actuator/health",
@@ -85,8 +86,8 @@ async function warmService(service, onWaking) {
     throw new Error(`Unknown bookstore service: ${service}`);
   }
 
-  // The API gateway's upstream health route returns 502 for a sleeping Render
-  // service but does not wake that service. Hit its public health URL directly.
+  // The gateway is warmed first; its CORS-enabled Auth health route then wakes
+  // the account service without a cross-domain browser request.
   await warmEndpoint("gateway", `${hostedBackend}/`, "bookstore gateway", onWaking);
   if (service !== "gateway") {
     await warmEndpoint(service, directHealthUrls[service], `${service} service`, onWaking);
@@ -131,12 +132,12 @@ async function request(base, path, { token, warm, onWaking, ...options } = {}) {
 const json = (method, payload) => ({ method, body: JSON.stringify(payload) });
 
 const springApi = {
-  login: (payload) => request(API.auth, "/api/auth/login", json("POST", payload)),
-  startPasswordRecovery: (payload) => request(API.auth, "/api/auth/password/forgot", json("POST", payload)),
-  resetPassword: (payload) => request(API.auth, "/api/auth/password/reset", json("POST", payload)),
-  startRegistration: (payload) => request(API.auth, "/api/auth/register/start", json("POST", payload)),
-  sendRegistrationEmailOtp: (payload) => request(API.auth, "/api/auth/register/email/send-otp", json("POST", payload)),
-  completeOtpRegistration: (payload) => request(API.auth, "/api/auth/register/complete", json("POST", payload)),
+  login: (payload, onWaking) => request(API.auth, "/api/auth/login", { ...json("POST", payload), warm: "auth", onWaking }),
+  startPasswordRecovery: (payload, onWaking) => request(API.auth, "/api/auth/password/forgot", { ...json("POST", payload), warm: "auth", onWaking }),
+  resetPassword: (payload, onWaking) => request(API.auth, "/api/auth/password/reset", { ...json("POST", payload), warm: "auth", onWaking }),
+  startRegistration: (payload, onWaking) => request(API.auth, "/api/auth/register/start", { ...json("POST", payload), warm: "auth", onWaking }),
+  sendRegistrationEmailOtp: (payload, onWaking) => request(API.auth, "/api/auth/register/email/send-otp", { ...json("POST", payload), warm: "auth", onWaking }),
+  completeOtpRegistration: (payload, onWaking) => request(API.auth, "/api/auth/register/complete", { ...json("POST", payload), warm: "auth", onWaking }),
   getBooks: (query = "") => request(API.catalog, `/api/products${query ? `?q=${encodeURIComponent(query)}` : ""}`),
   getBook: (id) => request(API.catalog, `/api/products/${encodeURIComponent(id)}`),
   getRelatedBooks: (id) => request(API.catalog, `/api/products/${encodeURIComponent(id)}/related`),
