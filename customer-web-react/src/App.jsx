@@ -1200,15 +1200,16 @@ function App() {
   }
 
   async function beginRegistration(details = registration) {
+    const wakeNotice = () => showToast("Waking the account service. Signup will continue automatically…");
     const started = await api.startRegistration({
       name: details.name.trim(),
       phoneNumber: details.phoneNumber.trim(),
-    });
+    }, wakeNotice);
     setRegistrationId(started.registrationId);
     const response = await api.sendRegistrationEmailOtp({
       registrationId: started.registrationId,
       email: details.email.trim(),
-    });
+    }, wakeNotice);
     setEmailDemoOtp(response.debugEmailOtp || "");
     setRegistrationStep("emailCode");
     showToast(response.message || "Email verification code sent.");
@@ -1218,7 +1219,7 @@ function App() {
     const response = await api.sendRegistrationEmailOtp({
       registrationId,
       email: registration.email.trim(),
-    });
+    }, () => showToast("Waking the account service. Your email code request will continue automatically…"));
     setEmailDemoOtp(response.debugEmailOtp || "");
     setRegistrationStep("emailCode");
     showToast(response.message || "Email verification code sent.");
@@ -1251,7 +1252,10 @@ function App() {
     if (!recoveryIdentifier || authBusy) return;
     setAuthBusy(true);
     try {
-      const response = await api.startPasswordRecovery({ identifier: recoveryIdentifier });
+      const response = await api.startPasswordRecovery(
+        { identifier: recoveryIdentifier },
+        () => showToast("Waking the account service. Your reset code request will continue automatically…"),
+      );
       setRecoveryMaskedEmail(response.maskedEmail || "");
       setRecoveryDemoOtp(response.debugOtp || "");
       showToast("If an account matches those details, a new code has been sent.");
@@ -1270,7 +1274,10 @@ function App() {
     try {
       if (authMode === "forgot") {
         const identifier = form.get("identifier").trim();
-        const response = await api.startPasswordRecovery({ identifier });
+        const response = await api.startPasswordRecovery(
+          { identifier },
+          () => showToast("Waking the account service. Your reset code request will continue automatically…"),
+        );
         setRecoveryIdentifier(identifier);
         setRecoveryMaskedEmail(response.maskedEmail || "");
         setRecoveryDemoOtp(response.debugOtp || "");
@@ -1285,7 +1292,7 @@ function App() {
           otpCode: form.get("otpCode").trim(),
           newPassword: form.get("newPassword"),
           confirmPassword: form.get("confirmPassword"),
-        });
+        }, () => showToast("Waking the account service. Your password reset will continue automatically…"));
         setAuthMode("login");
         setRecoveryIdentifier("");
         setRecoveryMaskedEmail("");
@@ -1314,7 +1321,7 @@ function App() {
           emailOtpCode: form.get("emailOtpCode").trim(),
           password: registration.password,
           confirmPassword: registration.confirmPassword,
-        });
+        }, () => showToast("Waking the account service. Signup will continue automatically…"));
         await completeAuthentication(response, registration.name);
         showToast("Your verified account is ready. Welcome to the nest.");
         return;
@@ -1323,7 +1330,7 @@ function App() {
       const response = await api.login({
         identifier: form.get("identifier").trim(),
         password: form.get("password"),
-      });
+      }, () => showToast("Waking the account service. Sign in will continue automatically…"));
       await completeAuthentication(response);
       showToast("Welcome back to the nest.");
     } catch (error) {
