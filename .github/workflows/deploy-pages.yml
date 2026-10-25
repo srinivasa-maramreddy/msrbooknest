@@ -49,6 +49,7 @@ jobs:
         env:
           VITE_BASE_PATH: /msrbooknest/
           VITE_BACKEND_BASE_URL: ${{ vars.VITE_BACKEND_BASE_URL || 'https://msrbooknest-srinivas-api.onrender.com' }}
+          VITE_AUTH_API_BASE_URL: https://msrbooknest-srinivas-auth.onrender.com
           VITE_DEMO_MODE: "false"
           VITE_MOCK_NPCI: "true"
         run: pnpm build

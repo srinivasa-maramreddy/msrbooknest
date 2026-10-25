@@ -8,7 +8,7 @@ const warmupTimeoutMs = 300_000;
 const warmupRequestTimeoutMs = 8_000;
 const warmupRetryDelayMs = [1_000, 2_000, 4_000, 8_000, 12_000, 15_000];
 const directHealthUrls = {
-  auth: `${hostedBackend}/health/auth`,
+  auth: "https://msrbooknest-srinivas-auth.onrender.com/actuator/health",
   catalog: "https://msrbooknest-srinivas-catalog.onrender.com/actuator/health",
   cart: "https://msrbooknest-srinivas-cart.onrender.com/actuator/health",
   orders: "https://msrbooknest-srinivas-orders.onrender.com/actuator/health",
@@ -86,9 +86,14 @@ async function warmService(service, onWaking) {
     throw new Error(`Unknown bookstore service: ${service}`);
   }
 
-  // The gateway is warmed first; its CORS-enabled Auth health route then wakes
-  // the account service without a cross-domain browser request.
-  await warmEndpoint("gateway", `${hostedBackend}/`, "bookstore gateway", onWaking);
+  const authUsesDirectService = service === "auth"
+    && API.auth.replace(/\/+$/, "") === new URL(directHealthUrls.auth).origin;
+
+  // Auth requests can bypass the gateway entirely, so wake only Auth for them.
+  // Other services still need the gateway warmed before their API call.
+  if (!authUsesDirectService) {
+    await warmEndpoint("gateway", `${hostedBackend}/`, "bookstore gateway", onWaking);
+  }
   if (service !== "gateway") {
     await warmEndpoint(service, directHealthUrls[service], `${service} service`, onWaking);
   }

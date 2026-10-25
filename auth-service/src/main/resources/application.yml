@@ -6,6 +6,9 @@ management:
     web:
       exposure:
         include: health
+      cors:
+        allowed-origins: ${APP_WEB_ORIGINS:http://localhost:5173}
+        allowed-methods: GET,OPTIONS
   endpoint:
     health:
       show-details: never
