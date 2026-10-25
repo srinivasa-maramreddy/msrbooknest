@@ -2,6 +2,7 @@ package com.bookstore.catalog.config;
 
 import com.bookstore.catalog.entity.Book;
 import com.bookstore.catalog.repository.BookRepository;
+import com.bookstore.catalog.service.StorefrontCatalogSampler;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.ApplicationArguments;
@@ -30,6 +31,10 @@ public class DemoCatalogSeeder implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        if (bookRepository.count() >= StorefrontCatalogSampler.LIMIT) {
+            return;
+        }
+
         List<Book> existing = bookRepository.findAll();
         Set<String> titles = new HashSet<>();
         existing.forEach(book -> titles.add(book.getTitle().toLowerCase()));
@@ -48,8 +53,9 @@ public class DemoCatalogSeeder implements ApplicationRunner {
         addBiographyAndChildren(catalog);
         addBundles(catalog);
 
-        List<Book> newProducts = catalog.stream()
+        List<Book> newProducts = StorefrontCatalogSampler.select(catalog).stream()
                 .filter(book -> titles.add(book.getTitle().toLowerCase()))
+                .limit(Math.max(0, StorefrontCatalogSampler.LIMIT - existing.size()))
                 .toList();
         if (!newProducts.isEmpty()) {
             bookRepository.saveAll(newProducts);

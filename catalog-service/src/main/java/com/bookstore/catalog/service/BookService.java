@@ -16,6 +16,7 @@ import com.bookstore.catalog.entity.InventoryReservationStatus;
 import com.bookstore.catalog.repository.BookRepository;
 import com.bookstore.catalog.repository.InventoryReservationRepository;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -36,11 +37,22 @@ public class BookService {
     }
 
     public List<Book> getAll() {
-        return bookRepository.findAll();
+        return StorefrontCatalogSampler.select(bookRepository.findAll(Sort.by(Sort.Direction.ASC, "id")));
     }
 
     public List<Book> search(String q) {
-        return bookRepository.findByTitleContainingIgnoreCaseOrAuthorContainingIgnoreCase(q, q);
+        return StorefrontCatalogSampler.select(bookRepository.findByTitleContainingIgnoreCaseOrAuthorContainingIgnoreCase(q, q));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getStorefrontProducts(String query) {
+        List<Book> books = query == null || query.isBlank()
+                ? bookRepository.findAll(Sort.by(Sort.Direction.ASC, "id"))
+                : bookRepository.searchProducts(query.trim());
+
+        return StorefrontCatalogSampler.select(books).stream()
+                .map(ProductResponse::new)
+                .toList();
     }
 
     @Transactional(readOnly = true)

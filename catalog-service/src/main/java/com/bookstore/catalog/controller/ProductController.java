@@ -35,12 +35,12 @@ public class ProductController {
 
     @GetMapping("/products")
     public ResponseEntity<?> getProducts(@RequestParam(value = "q", required = false) String query) {
-        return ResponseEntity.ok(bookService.searchProducts(query));
+        return ResponseEntity.ok(bookService.getStorefrontProducts(query));
     }
 
     @GetMapping("/products/search")
     public ResponseEntity<?> searchProducts(@RequestParam(value = "q", required = false) String query) {
-        return ResponseEntity.ok(bookService.searchProducts(query));
+        return ResponseEntity.ok(bookService.getStorefrontProducts(query));
     }
 
     @GetMapping("/products/suggestions")
