@@ -7,13 +7,6 @@ const serviceReadyAt = new Map();
 const warmupTimeoutMs = 300_000;
 const warmupRequestTimeoutMs = 8_000;
 const warmupRetryDelayMs = [1_000, 2_000, 4_000, 8_000, 12_000, 15_000];
-const directHealthUrls = {
-  auth: "https://msrbooknest-srinivas-auth.onrender.com/actuator/health",
-  catalog: "https://msrbooknest-srinivas-catalog.onrender.com/actuator/health",
-  cart: "https://msrbooknest-srinivas-cart.onrender.com/actuator/health",
-  orders: "https://msrbooknest-srinivas-orders.onrender.com/actuator/health",
-  payments: "https://msrbooknest-srinivas-payments.onrender.com/actuator/health",
-};
 const API = {
   auth: import.meta.env.VITE_AUTH_API_BASE_URL || hostedBackend || "http://localhost:8081",
   catalog: import.meta.env.VITE_CATALOG_API_BASE_URL || hostedBackend || "http://localhost:8082",
@@ -22,6 +15,25 @@ const API = {
   payment: import.meta.env.VITE_PAYMENT_API_BASE_URL || hostedBackend || "http://localhost:8085",
   buyback: import.meta.env.VITE_BUYBACK_API_BASE_URL || hostedBackend || "http://localhost:8086",
 };
+const usesUnifiedGateway = hostedBackend
+  && Object.values(API).every((base) => base.replace(/\/+$/, "") === hostedBackend);
+const directHealthUrls = usesUnifiedGateway
+  ? {
+      auth: `${hostedBackend}/health/auth`,
+      catalog: `${hostedBackend}/health/catalog`,
+      cart: `${hostedBackend}/health/cart`,
+      orders: `${hostedBackend}/health/orders`,
+      payments: `${hostedBackend}/health/payments`,
+      buyback: `${hostedBackend}/health/buyback`,
+    }
+  : {
+      auth: "https://msrbooknest-srinivas-auth.onrender.com/actuator/health",
+      catalog: "https://msrbooknest-srinivas-catalog.onrender.com/actuator/health",
+      cart: "https://msrbooknest-srinivas-cart.onrender.com/actuator/health",
+      orders: "https://msrbooknest-srinivas-orders.onrender.com/actuator/health",
+      payments: "https://msrbooknest-srinivas-payments.onrender.com/actuator/health",
+      buyback: "https://msrbooknest-srinivas-buyback.onrender.com/actuator/health",
+    };
 
 function wait(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));

@@ -28,6 +28,7 @@ target/
 node_modules/
 dist/
 .env
+.env.lightsail
 .env.otp
 .pnpm-store/
 .DS_Store
