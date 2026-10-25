@@ -1,7 +1,8 @@
-set $cors_allow_origin "https://srinivasa-maramreddy.github.io";
-    if ($http_origin ~ "^http://localhost(:[0-9]+)?$") {
-        set $cors_allow_origin $http_origin;
-    }
+map $http_origin $cors_allow_origin {
+    default "";
+    "~^https://srinivasa-maramreddy\.github\.io$" $http_origin;
+    "~^http://localhost(:[0-9]+)?$" $http_origin;
+}
 
 server {
     listen ${PORT};
