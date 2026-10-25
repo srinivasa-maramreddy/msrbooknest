@@ -49,8 +49,8 @@ services:
       APP_WEB_ORIGINS: $APP_WEB_ORIGINS
       ORDER_SERVICE_BASE_URL: "http://$NODE2_PRIVATE_IP:8083"
       SPRING_JPA_SHOW_SQL: "false"
-      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -Xss512k"
-    mem_limit: 384m
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -Xss512k"
+    mem_limit: 448m
 
   cart-service:
     build:
