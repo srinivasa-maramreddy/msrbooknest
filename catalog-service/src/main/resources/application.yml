@@ -1,5 +1,9 @@
 server:
   port: ${PORT:8082}
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 1KB
 
 management:
   endpoints:
