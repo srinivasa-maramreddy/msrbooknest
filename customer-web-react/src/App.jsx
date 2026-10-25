@@ -9,6 +9,7 @@ const STATIC_PAGES_DEMO = isBrowserDemo;
 const MOCK_NPCI_CHECKOUT = !STATIC_PAGES_DEMO && import.meta.env.VITE_MOCK_NPCI === "true";
 const DEMO_PAYMENT = STATIC_PAGES_DEMO || MOCK_NPCI_CHECKOUT;
 const CART_KEY = "booknest_react_guest_cart";
+const COVER_IMAGE_STATUS = new Map();
 const PUBLISHER_COVER_IMAGES = [
   "https://d9h54mr6do0h0.cloudfront.net/bookimage/9789366602257.jpg",
   "https://arihantbooks.com/cdn/shop/files/B012-F_9d482637-d21b-454e-9e06-1eaffcdf4908.jpg?v=1773296020",
@@ -454,23 +455,57 @@ function isExamPrepBook(book) {
   return /\b(cengage|arihant|neet|jee)\b/i.test(`${book.title || ""} ${book.author || ""} ${book.description || ""}`);
 }
 
+function knownCoverImageStatus(imageUrl) {
+  return imageUrl ? COVER_IMAGE_STATUS.get(imageUrl) || "loading" : "failed";
+}
+
+function useCoverImageStatus(imageUrl) {
+  const [imageState, setImageState] = useState(() => ({ url: imageUrl, status: knownCoverImageStatus(imageUrl) }));
+  const status = imageState.url === imageUrl ? imageState.status : knownCoverImageStatus(imageUrl);
+  const updateStatus = useCallback((nextStatus) => {
+    if (imageUrl) COVER_IMAGE_STATUS.set(imageUrl, nextStatus);
+    setImageState({ url: imageUrl, status: nextStatus });
+  }, [imageUrl]);
+
+  return { status, updateStatus };
+}
+
 function Cover({ book, compact = false }) {
   const verifiedUrl = VERIFIED_BOOK_COVER_URLS[String(book.title || "").trim().toLowerCase()];
-  const imageUrl = book.imageUrl || verifiedUrl || (book.isbn
+  const imageUrl = String(book.imageUrl || verifiedUrl || (book.isbn
     ? `https://covers.openlibrary.org/b/isbn/${String(book.isbn).replace(/[^0-9X]/gi, "")}-L.jpg?default=false`
-    : "");
-  const [coverFailed, setCoverFailed] = useState(false);
-  const [coverLoaded, setCoverLoaded] = useState(false);
+    : "")).trim();
+  const { status, updateStatus } = useCoverImageStatus(imageUrl);
+  const coverFailed = Boolean(imageUrl) && status === "failed";
+  const coverLoaded = status === "loaded";
   const isOriginalCover = Boolean(imageUrl && coverLoaded && !coverFailed);
   const demoCoverUrl = useMemo(() => createDemoCoverDataUrl(book), [book]);
   return (
     <div className={`book-cover cover-${getCoverTone(book)}${isOriginalCover ? " book-cover-original" : " book-cover-illustrated"}${compact ? " cover-compact" : ""}`}>
       <img className="cover-demo-image" src={demoCoverUrl} alt={!imageUrl || coverFailed || !coverLoaded ? `Illustrative sample cover for ${book.title}` : ""} aria-hidden={Boolean(imageUrl && coverLoaded && !coverFailed)} />
-      {imageUrl && !coverFailed && <img className={`cover-publisher-image${coverLoaded ? " cover-publisher-image-loaded" : ""}`} src={imageUrl} alt={`Original cover of ${book.title}`} aria-hidden={!coverLoaded} loading="lazy" onLoad={() => setCoverLoaded(true)} onError={() => setCoverFailed(true)} />}
+      {imageUrl && !coverFailed && <img key={imageUrl} className={`cover-publisher-image${coverLoaded ? " cover-publisher-image-loaded" : ""}`} src={imageUrl} alt={`Original cover of ${book.title}`} aria-hidden={!coverLoaded} loading={compact ? "eager" : "lazy"} decoding="async" referrerPolicy="no-referrer" onLoad={(event) => {
+        const image = event.currentTarget;
+        updateStatus(image.naturalWidth >= 24 && image.naturalHeight >= 24 ? "loaded" : "failed");
+      }} onError={() => updateStatus("failed")} />}
     </div>
   );
 }
 
+function AdCoverPhoto({ src, position, title, author }) {
+  const book = useMemo(() => ({ id: `promo-${title}`, title, author, category: "Entrance Exams", subcategory: "JEE & NEET" }), [title, author]);
+  const fallbackUrl = useMemo(() => createDemoCoverDataUrl(book), [book]);
+  const { status, updateStatus } = useCoverImageStatus(src);
+  const loaded = status === "loaded";
+  const failed = status === "failed";
+
+  return <div className={`ad-cover-photo ${position}`} aria-hidden="true">
+    <img className="ad-cover-placeholder" src={fallbackUrl} alt="" />
+    {!failed && <img key={src} className={`ad-cover-publisher${loaded ? " ad-cover-publisher-loaded" : ""}`} src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={(event) => {
+      const image = event.currentTarget;
+      updateStatus(image.naturalWidth >= 24 && image.naturalHeight >= 24 ? "loaded" : "failed");
+    }} onError={() => updateStatus("failed")} />}
+  </div>;
+}
 function BrandEmblem() {
   return <span className="brand-mark" aria-hidden="true"><img className="brand-emblem-image" src={`${import.meta.env.BASE_URL}msrbooknest-logo.png`} alt="" /></span>;
 }
@@ -1495,9 +1530,9 @@ function App() {
         <div className="marketplace-hero-heading"><span className="eyebrow">A BOOK MARKETPLACE FOR EVERY READER</span><h1>Stories keep finding<br /><em>new readers.</em></h1><p>School textbooks, exam prep, novels and thoughtful reads—all on one shelf.</p><div className="home-hero-actions"><button className="button button-dark" onClick={() => goToCatalog("all")}>Explore all books <span aria-hidden="true">↗</span></button><button className="button button-outline" onClick={openBuyback}>Sell a book</button></div></div>
         <div className="marketplace-carousel" role="region" aria-roledescription="carousel" aria-label="Bookstore promotions" onMouseEnter={() => setAdsHovered(true)} onMouseLeave={() => setAdsHovered(false)} onFocusCapture={() => setAdsFocused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setAdsFocused(false); }}>
           <div className="marketplace-carousel-window"><div className="marketplace-carousel-track" style={{ transform: `translateX(-${activeAd * 100}%)` }}>
-            <article className="marketplace-ad marketplace-ad-buy" aria-label="1 of 3: Buy a book" aria-hidden={activeAd !== 0} inert={activeAd !== 0}><div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-one" src={PUBLISHER_COVER_IMAGES[0]} alt="" /><img className="ad-cover-photo ad-cover-photo-two" src={PUBLISHER_COVER_IMAGES[1]} alt="" /></div><div className="marketplace-ad-copy"><span className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</span><h2>Books for every mind.</h2><p>Find textbooks, reference guides and stories worth keeping.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Buy a book ↗</button></div></article>
-            <article className="marketplace-ad marketplace-ad-sell" aria-label="2 of 3: Sell a book" aria-hidden={activeAd !== 1} inert={activeAd !== 1}><div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-three" src={PUBLISHER_COVER_IMAGES[2]} alt="" /><img className="ad-cover-photo ad-cover-photo-four" src={PUBLISHER_COVER_IMAGES[1]} alt="" /></div><div className="marketplace-ad-copy"><span className="eyebrow">READY TO PASS ONE ALONG?</span><h2>Give a book a new reader.</h2><p>Share a few photos, review a quote, and follow each step.</p><button className="button button-outline" onClick={openBuyback}>Sell a book ↗</button></div></article>
-            <article className="marketplace-ad marketplace-ad-value" aria-label="3 of 3: Affordable books" aria-hidden={activeAd !== 2} inert={activeAd !== 2}><div className="marketplace-ad-art" aria-hidden="true"><img className="ad-cover-photo ad-cover-photo-five" src={PUBLISHER_COVER_IMAGES[0]} alt="" /></div><div className="marketplace-ad-copy"><span className="eyebrow">SMALL BUDGET, BIG IDEAS</span><h2>Good reads under ₹400.</h2><p>Make room for another story at a price that feels right.</p><button className="button button-outline" onClick={() => goToCatalog("under400")}>Shop under ₹400 ↗</button></div></article>
+            <article className="marketplace-ad marketplace-ad-buy" aria-label="1 of 3: Buy a book" aria-hidden={activeAd !== 0} inert={activeAd !== 0}><div className="marketplace-ad-art" aria-hidden="true"><AdCoverPhoto src={PUBLISHER_COVER_IMAGES[0]} position="ad-cover-photo-one" title="Cengage JEE Mathematics" author="Cengage Learning" /><AdCoverPhoto src={PUBLISHER_COVER_IMAGES[1]} position="ad-cover-photo-two" title="Arihant JEE Mathematics" author="Arihant Publications" /></div><div className="marketplace-ad-copy"><span className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</span><h2>Books for every mind.</h2><p>Find textbooks, reference guides and stories worth keeping.</p><button className="button button-dark" onClick={() => goToCatalog("all")}>Buy a book ↗</button></div></article>
+            <article className="marketplace-ad marketplace-ad-sell" aria-label="2 of 3: Sell a book" aria-hidden={activeAd !== 1} inert={activeAd !== 1}><div className="marketplace-ad-art" aria-hidden="true"><AdCoverPhoto src={PUBLISHER_COVER_IMAGES[2]} position="ad-cover-photo-three" title="Cengage JEE Mathematics" author="Cengage Learning" /><AdCoverPhoto src={PUBLISHER_COVER_IMAGES[1]} position="ad-cover-photo-four" title="Arihant JEE Mathematics" author="Arihant Publications" /></div><div className="marketplace-ad-copy"><span className="eyebrow">READY TO PASS ONE ALONG?</span><h2>Give a book a new reader.</h2><p>Share a few photos, review a quote, and follow each step.</p><button className="button button-outline" onClick={openBuyback}>Sell a book ↗</button></div></article>
+            <article className="marketplace-ad marketplace-ad-value" aria-label="3 of 3: Affordable books" aria-hidden={activeAd !== 2} inert={activeAd !== 2}><div className="marketplace-ad-art" aria-hidden="true"><AdCoverPhoto src={PUBLISHER_COVER_IMAGES[0]} position="ad-cover-photo-five" title="Cengage JEE Mathematics" author="Cengage Learning" /></div><div className="marketplace-ad-copy"><span className="eyebrow">SMALL BUDGET, BIG IDEAS</span><h2>Good reads under ₹400.</h2><p>Make room for another story at a price that feels right.</p><button className="button button-outline" onClick={() => goToCatalog("under400")}>Shop under ₹400 ↗</button></div></article>
           </div></div>
           <div className="marketplace-carousel-controls"><button className="carousel-arrow" aria-label="Previous advertisement" onClick={() => setActiveAd((current) => (current + 2) % 3)}>←</button><div className="marketplace-carousel-dots" role="group" aria-label="Choose an advertisement">{["Buy books", "Sell a book", "Books under ₹400"].map((label, index) => <button key={label} className={activeAd === index ? "carousel-dot active" : "carousel-dot"} aria-label={`Show ${label}`} aria-current={activeAd === index ? "true" : undefined} onClick={() => setActiveAd(index)} />)}</div><span className="carousel-count">0{activeAd + 1} <span>/</span> 03</span><button className="carousel-pause" aria-label={adsPaused ? "Resume automatic promotions" : "Pause automatic promotions"} aria-pressed={adsPaused} onClick={() => setAdsPaused((paused) => !paused)}>{adsPaused ? "Play ▶" : "Pause Ⅱ"}</button><button className="carousel-arrow" aria-label="Next advertisement" onClick={() => setActiveAd((current) => (current + 1) % 3)}>→</button></div>
         </div>

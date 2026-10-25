@@ -1046,7 +1046,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 .book-cover-illustrated img { object-fit: contain; object-position: center; }
 .cover-demo-image { z-index: 1; }
-.cover-publisher-image { z-index: 2; opacity: 0; transition: opacity .15s ease; }
+.cover-publisher-image { z-index: 2; opacity: 0; transition: none; }
 .cover-publisher-image-loaded { opacity: 1; }
 
 .button-dark,
@@ -1094,11 +1094,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   height: 168px;
   position: absolute;
   z-index: 1;
-  object-fit: contain;
-  object-position: center;
+  overflow: hidden;
   background: #fff;
   box-shadow: 10px 12px 22px #17324f35;
 }
+.ad-cover-photo img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: contain; object-position: center; background: #fff; }
+.ad-cover-placeholder { z-index: 1; }
+.ad-cover-publisher { z-index: 2; opacity: 0; transition: none; }
+.ad-cover-publisher-loaded { opacity: 1; }
 .ad-cover-photo-one { top: 29px; left: calc(50% - 105px); transform: rotate(-12deg); }
 .ad-cover-photo-two { top: 48px; left: calc(50% - 3px); transform: rotate(9deg); }
 .ad-cover-photo-three { top: 29px; left: calc(50% - 105px); transform: rotate(-10deg); }
