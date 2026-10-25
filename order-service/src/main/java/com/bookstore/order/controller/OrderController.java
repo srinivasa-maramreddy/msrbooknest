@@ -65,7 +65,7 @@ public class OrderController {
     }
 
     @GetMapping("/me/reference/{orderRequestId}")
-    public ResponseEntity<?> getMyOrderByReference(@PathVariable String orderRequestId, HttpServletRequest request) {
+    public ResponseEntity<?> getMyOrderByReference(@PathVariable("orderRequestId") String orderRequestId, HttpServletRequest request) {
         String email = getEmail(request);
         if (email == null) return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
         try {
@@ -76,7 +76,7 @@ public class OrderController {
     }
 
     @GetMapping("/me/review-eligibility/{bookId}")
-    public ResponseEntity<?> reviewEligibility(@PathVariable Long bookId, HttpServletRequest request) {
+    public ResponseEntity<?> reviewEligibility(@PathVariable("bookId") Long bookId, HttpServletRequest request) {
         String email = getEmail(request);
         if (email == null) {
             return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));

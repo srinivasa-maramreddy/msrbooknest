@@ -32,7 +32,7 @@ public class WishlistController {
     }
 
     @PostMapping("/items/{bookId}")
-    public ResponseEntity<?> add(@PathVariable Long bookId) {
+    public ResponseEntity<?> add(@PathVariable("bookId") Long bookId) {
         String email = getEmail();
         if (email == null) return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
         try {
@@ -43,7 +43,7 @@ public class WishlistController {
     }
 
     @DeleteMapping("/items/{bookId}")
-    public ResponseEntity<?> remove(@PathVariable Long bookId) {
+    public ResponseEntity<?> remove(@PathVariable("bookId") Long bookId) {
         String email = getEmail();
         if (email == null) return ResponseEntity.status(401).body(Map.of("error", "JWT token required"));
         return ResponseEntity.ok(wishlistService.remove(email, bookId));
