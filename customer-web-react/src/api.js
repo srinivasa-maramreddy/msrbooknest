@@ -4,7 +4,7 @@ import { demoApi } from "./demo-api.js";
 const hostedBackend = (import.meta.env.VITE_BACKEND_BASE_URL || "").replace(/\/+$/, "");
 const serviceWarmup = new Map();
 const serviceReadyAt = new Map();
-const warmupTimeoutMs = 150_000;
+const warmupTimeoutMs = 300_000;
 const warmupRequestTimeoutMs = 8_000;
 const warmupRetryDelayMs = [1_000, 2_000, 4_000, 8_000, 12_000, 15_000];
 const API = {

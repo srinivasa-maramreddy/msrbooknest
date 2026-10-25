@@ -735,7 +735,7 @@ function App() {
 
   useEffect(() => {
     if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(""), toast.startsWith("Waking ") ? 155_000 : 3200);
+    const timer = window.setTimeout(() => setToast(""), toast.startsWith("Waking ") ? 305_000 : 3200);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
