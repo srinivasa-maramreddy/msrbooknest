@@ -1,4 +1,6 @@
-map $http_origin $cors_allow_origin {
+ tab: 10, Title: "raw.githubusercontent.com/srinivasa-maramreddy/msrbooknest/refs/heads/main/infra/render/nginx.conf.template", URL: "https://raw.githubusercontent.com/srinivasa-maramreddy/msrbooknest/refs/heads/main/infra/render/nginx.conf.template".
+0 AXWebArea raw.githubusercontent.com/srinivasa-maramreddy/msrbooknest/refs/heads/main/infra/render/nginx.conf.template
+	1 text map $http_origin $cors_allow_origin {
     default "";
     "~^https://srinivasa-maramreddy\.github\.io$" $http_origin;
     "~^http://localhost(:[0-9]+)?$" $http_origin;
@@ -37,6 +39,12 @@ server {
     location = / {
         default_type application/json;
         return 200 '{"service":"msrbooknest-api-gateway","status":"ok"}';
+    }
+
+    location = /health/auth {
+        set $auth_upstream ${AUTH_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $auth_upstream/actuator/health;
     }
 
     location = /health/catalog {
