@@ -47,10 +47,10 @@ services:
       CATALOG_SERVICE_BASE_URL: "http://$NODE1_PRIVATE_IP:8082"
       CART_SERVICE_BASE_URL: "http://$NODE1_PRIVATE_IP:8084"
       SPRING_JPA_SHOW_SQL: "false"
-      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx160m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -Xss512k"
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -Xss512k"
     depends_on:
       - kafka
-    mem_limit: 352m
+    mem_limit: 384m
 
   payment-service:
     build:
