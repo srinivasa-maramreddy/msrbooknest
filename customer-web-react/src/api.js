@@ -7,6 +7,12 @@ const serviceReadyAt = new Map();
 const warmupTimeoutMs = 300_000;
 const warmupRequestTimeoutMs = 8_000;
 const warmupRetryDelayMs = [1_000, 2_000, 4_000, 8_000, 12_000, 15_000];
+const directHealthUrls = {
+  catalog: "https://msrbooknest-srinivas-catalog.onrender.com/actuator/health",
+  cart: "https://msrbooknest-srinivas-cart.onrender.com/actuator/health",
+  orders: "https://msrbooknest-srinivas-orders.onrender.com/actuator/health",
+  payments: "https://msrbooknest-srinivas-payments.onrender.com/actuator/health",
+};
 const API = {
   auth: import.meta.env.VITE_AUTH_API_BASE_URL || hostedBackend || "http://localhost:8081",
   catalog: import.meta.env.VITE_CATALOG_API_BASE_URL || hostedBackend || "http://localhost:8082",
@@ -20,25 +26,15 @@ function wait(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function warmService(service, onWaking) {
-  if (!hostedBackend) return;
-
-  const readyAt = serviceReadyAt.get(service) || 0;
+async function warmEndpoint(key, url, label, onWaking) {
+  const readyAt = serviceReadyAt.get(key) || 0;
   if (Date.now() - readyAt < 10 * 60_000) return;
-  if (serviceWarmup.has(service)) {
+  if (serviceWarmup.has(key)) {
     onWaking?.();
-    return serviceWarmup.get(service);
+    return serviceWarmup.get(key);
   }
   onWaking?.();
 
-  const healthPaths = {
-    catalog: "/health/catalog",
-    cart: "/health/cart",
-    orders: "/health/orders",
-    payments: "/health/payments",
-  };
-  const healthPath = healthPaths[service];
-  if (!healthPath) throw new Error(`Unknown bookstore service: ${service}`);
   const pending = (async () => {
     const deadline = Date.now() + warmupTimeoutMs;
     let attempt = 0;
@@ -48,18 +44,18 @@ async function warmService(service, onWaking) {
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), warmupRequestTimeoutMs);
       try {
-        const response = await fetch(`${hostedBackend}${healthPath}`, {
+        const response = await fetch(url, {
           cache: "no-store",
           signal: controller.signal,
         });
         if (response.ok) {
-          serviceReadyAt.set(service, Date.now());
+          serviceReadyAt.set(key, Date.now());
           return;
         }
         if (response.status < 500 || response.status > 504) {
-          throw new Error(`The ${service} service health check returned ${response.status}.`);
+          throw new Error(`The ${label} health check returned ${response.status}.`);
         }
-        lastError = new Error(`The ${service} service is still starting.`);
+        lastError = new Error(`The ${label} is still starting.`);
       } catch (error) {
         if (error.message?.includes("health check returned")) throw error;
         lastError = error;
@@ -72,14 +68,28 @@ async function warmService(service, onWaking) {
       await wait(Math.min(delay, Math.max(0, deadline - Date.now())));
     }
 
-    throw new Error(`The ${service} service is taking longer than expected to wake. Please wait a little and try again.`, { cause: lastError });
+    throw new Error(`The ${label} is taking longer than expected to wake. Please wait a little and try again.`, { cause: lastError });
   })();
 
-  serviceWarmup.set(service, pending);
+  serviceWarmup.set(key, pending);
   try {
     await pending;
   } finally {
-    serviceWarmup.delete(service);
+    serviceWarmup.delete(key);
+  }
+}
+
+async function warmService(service, onWaking) {
+  if (!hostedBackend) return;
+  if (service !== "gateway" && !directHealthUrls[service]) {
+    throw new Error(`Unknown bookstore service: ${service}`);
+  }
+
+  // The API gateway's upstream health route returns 502 for a sleeping Render
+  // service but does not wake that service. Hit its public health URL directly.
+  await warmEndpoint("gateway", `${hostedBackend}/`, "bookstore gateway", onWaking);
+  if (service !== "gateway") {
+    await warmEndpoint(service, directHealthUrls[service], `${service} service`, onWaking);
   }
 }
 
