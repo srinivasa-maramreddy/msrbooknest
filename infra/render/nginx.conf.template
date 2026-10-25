@@ -1,7 +1,19 @@
+map $http_origin $cors_allow_origin {
+    default "";
+    "~^https://srinivasa-maramreddy\.github\.io$" $http_origin;
+    "~^http://localhost(:[0-9]+)?$" $http_origin;
+}
+
 server {
     listen ${PORT};
     server_name _;
     client_max_body_size 4m;
+
+    add_header Access-Control-Allow-Origin $cors_allow_origin always;
+    add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, Idempotency-Key" always;
+    add_header Access-Control-Max-Age 600 always;
+    add_header Vary Origin always;
 
     resolver 1.1.1.1 8.8.8.8 valid=60s ipv6=off;
     resolver_timeout 10s;
@@ -13,10 +25,42 @@ server {
     proxy_connect_timeout 120s;
     proxy_send_timeout 120s;
     proxy_read_timeout 120s;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Credentials;
+
+    if ($request_method = OPTIONS) {
+        return 204;
+    }
 
     location = / {
         default_type application/json;
         return 200 '{"service":"msrbooknest-api-gateway","status":"ok"}';
+    }
+
+    location = /health/catalog {
+        set $catalog_upstream ${CATALOG_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $catalog_upstream/actuator/health;
+    }
+
+    location = /health/cart {
+        set $cart_upstream ${CART_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $cart_upstream/actuator/health;
+    }
+
+    location = /health/orders {
+        set $order_upstream ${ORDER_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $order_upstream/actuator/health;
+    }
+
+    location = /health/payments {
+        set $payment_upstream ${PAYMENT_SERVICE_URL};
+        proxy_ssl_name $proxy_host;
+        proxy_pass $payment_upstream/actuator/health;
     }
 
     location ^~ /api/auth {

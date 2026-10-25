@@ -216,7 +216,8 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
       const nextAttemptId = !attemptRequestId || terminalAttempt ? newPaymentAttemptId() : attemptRequestId;
       setAttemptRequestId(nextAttemptId);
       rememberPaymentAttemptId(orderRequestId, nextAttemptId);
-      const checkout = await api.createPaymentOrder(token, orderRequestId, nextAttemptId, nextAttemptId);
+      const checkout = await api.createPaymentOrder(token, orderRequestId, nextAttemptId, nextAttemptId,
+        () => setNotice("Waking the payment service. Your checkout will continue automatically…"));
       setPayment(checkout);
       if (checkout?.attemptRequestId) {
         setAttemptRequestId(checkout.attemptRequestId);
@@ -259,7 +260,7 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
               razorpayOrderId: callback.razorpay_order_id,
               razorpayPaymentId: callback.razorpay_payment_id,
               razorpaySignature: callback.razorpay_signature,
-            });
+            }, () => setNotice("Waking the payment service. We’ll continue verification automatically…"));
             setPayment(result);
             setNotice(result.status === "PENDING" ? "We couldn't verify your payment yet. Your payment status is being checked." : "");
           } catch (verificationError) {
@@ -322,7 +323,8 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
       setAttemptRequestId(nextAttemptId);
       rememberPaymentAttemptId(orderRequestId, nextAttemptId);
       const result = await api.simulateNpciPayment(token, orderRequestId, nextAttemptId,
-        outcome === "SUCCESS" ? "success@upi" : "fail@upi");
+        outcome === "SUCCESS" ? "success@upi" : "fail@upi",
+        () => setNotice("Waking the payment service. Your simulated result will continue automatically…"));
       setPayment(result);
       setNotice(result.message || "NPCI mock result saved. No real payment was sent.");
     } catch (paymentError) {
@@ -733,7 +735,7 @@ function App() {
 
   useEffect(() => {
     if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(""), 3200);
+    const timer = window.setTimeout(() => setToast(""), toast.startsWith("Waking ") ? 155_000 : 3200);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -895,7 +897,7 @@ function App() {
     setCheckoutQuote(null);
     setCheckoutQuoteLoading(true);
     setCheckoutQuoteError("");
-    api.quoteCheckout(token, checkoutItems)
+    api.quoteCheckout(token, checkoutItems, () => setToast("Waking the checkout services. Price check will continue automatically…"))
       .then((quote) => { if (!cancelled) setCheckoutQuote(quote); })
       .catch((error) => { if (!cancelled) setCheckoutQuoteError(error.message || "We could not verify price and availability."); })
       .finally(() => { if (!cancelled) setCheckoutQuoteLoading(false); });
@@ -941,8 +943,8 @@ function App() {
     try {
       const wasSaved = isWishlisted(book.id);
       const updated = wasSaved
-        ? await api.removeWishlistItem(token, book.id)
-        : await api.addWishlistItem(token, book.id);
+        ? await api.removeWishlistItem(token, book.id, () => showToast("Waking the cart service. Your wishlist action will continue automatically…"))
+        : await api.addWishlistItem(token, book.id, () => showToast("Waking the cart service. Your wishlist action will continue automatically…"));
       setWishlistIds(Array.isArray(updated) ? updated : []);
       showToast(wasSaved ? "Removed from your wishlist" : "Saved to your wishlist");
     } catch (error) {
@@ -960,7 +962,7 @@ function App() {
     const amount = Math.max(1, Math.floor(Number(quantity) || 1));
     try {
       if (token) {
-        const updated = await api.addCartItem(token, book.id, amount);
+        const updated = await api.addCartItem(token, book.id, amount, () => showToast("Waking the cart service. Your bag action will continue automatically…"));
         setCart(Array.isArray(updated) ? updated : []);
       } else {
         const currentQuantity = Number(cart.find((item) => String(item.bookId) === String(book.id))?.quantity || 0);
@@ -1109,7 +1111,8 @@ function App() {
         showToast("Refresh price and stock availability before continuing.");
         return;
       }
-      const order = await api.placeOrder(token, { ...payload, orderRequestId: idempotencyKey }, idempotencyKey);
+      const order = await api.placeOrder(token, { ...payload, orderRequestId: idempotencyKey }, idempotencyKey,
+        () => showToast("Waking the checkout services. Your order will continue automatically…"));
       navigate(`/payment/${encodeURIComponent(order.orderRequestId)}`);
     } catch (error) {
       setCheckoutQuoteError(error.message || "Checkout could not be confirmed.");
