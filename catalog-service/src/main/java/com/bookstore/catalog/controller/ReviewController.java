@@ -31,7 +31,7 @@ public class ReviewController {
     }
 
     @GetMapping
-    public ResponseEntity<?> list(@PathVariable Long bookId,
+    public ResponseEntity<?> list(@PathVariable("bookId") Long bookId,
                                   @RequestParam(defaultValue = "0") int page,
                                   @RequestParam(defaultValue = "5") int size,
                                   @RequestParam(required = false) Integer rating,
@@ -44,7 +44,7 @@ public class ReviewController {
     }
 
     @PostMapping
-    public ResponseEntity<?> create(@PathVariable Long bookId, @Valid @RequestBody ReviewRequest request,
+    public ResponseEntity<?> create(@PathVariable("bookId") Long bookId, @Valid @RequestBody ReviewRequest request,
                                     HttpServletRequest httpRequest) {
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(reviewService.create(bookId, getEmail(), getDisplayName(),
@@ -57,7 +57,7 @@ public class ReviewController {
     }
 
     @PutMapping("/{reviewId}")
-    public ResponseEntity<?> update(@PathVariable Long bookId, @PathVariable Long reviewId,
+    public ResponseEntity<?> update(@PathVariable("bookId") Long bookId, @PathVariable("reviewId") Long reviewId,
                                     @Valid @RequestBody ReviewRequest request) {
         try {
             return ResponseEntity.ok(reviewService.update(bookId, reviewId, getEmail(), request));
@@ -67,7 +67,7 @@ public class ReviewController {
     }
 
     @DeleteMapping("/{reviewId}")
-    public ResponseEntity<?> delete(@PathVariable Long bookId, @PathVariable Long reviewId) {
+    public ResponseEntity<?> delete(@PathVariable("bookId") Long bookId, @PathVariable("reviewId") Long reviewId) {
         try {
             reviewService.delete(bookId, reviewId, getEmail());
             return ResponseEntity.noContent().build();
