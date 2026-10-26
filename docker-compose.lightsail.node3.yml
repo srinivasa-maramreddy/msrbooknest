@@ -1,0 +1,28 @@
+services:
+  payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: payment-service
+        MAVEN_OPTS: "-Xmx256m -XX:MaxMetaspaceSize=128m"
+    restart: unless-stopped
+    ports:
+      - "${NODE3_PRIVATE_IP:?Set NODE3_PRIVATE_IP in .env.lightsail}:8085:8085"
+    environment:
+      PORT: "8085"
+      MYSQL_HOST: $MYSQL_HOST
+      MYSQL_PORT: $MYSQL_PORT
+      MYSQL_DATABASE: payment_db
+      MYSQL_USERNAME: $MYSQL_USERNAME
+      MYSQL_PASSWORD: $MYSQL_PASSWORD
+      MYSQL_SSL_MODE: $MYSQL_SSL_MODE
+      KAFKA_BOOTSTRAP_SERVERS: "$NODE2_PRIVATE_IP:9092"
+      APP_JWT_SECRET: $APP_JWT_SECRET
+      APP_WEB_ORIGINS: $APP_WEB_ORIGINS
+      ORDER_SERVICE_BASE_URL: "http://$NODE2_PRIVATE_IP:8083"
+      RAZORPAY_ENABLED: "false"
+      RAZORPAY_ALLOW_LIVE: "false"
+      SPRING_JPA_SHOW_SQL: "false"
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx160m -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -Xss512k"
+    mem_limit: 416m

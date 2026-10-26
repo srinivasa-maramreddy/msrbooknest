@@ -83,7 +83,8 @@ services:
     restart: unless-stopped
     environment:
       NODE2_PRIVATE_IP: $NODE2_PRIVATE_IP
-      NGINX_ENVSUBST_FILTER: "^NODE2_PRIVATE_IP$"
+      NODE3_PRIVATE_IP: $NODE3_PRIVATE_IP
+      NGINX_ENVSUBST_FILTER: "^NODE[23]_PRIVATE_IP$"
     volumes:
       - ./infra/lightsail/nginx.split.conf.template:/etc/nginx/templates/default.conf.template:ro
     ports:

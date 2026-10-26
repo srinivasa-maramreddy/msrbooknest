@@ -53,6 +53,7 @@ services:
     mem_limit: 448m
 
   payment-service:
+    profiles: [node2-payment-fallback]
     build:
       context: .
       dockerfile: Dockerfile.service

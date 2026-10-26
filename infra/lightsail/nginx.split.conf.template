@@ -36,7 +36,7 @@ server {
     location = /health/catalog { proxy_pass http://catalog-service:8082/actuator/health; }
     location = /health/cart { proxy_pass http://cart-service:8084/actuator/health; }
     location = /health/orders { proxy_pass http://$NODE2_PRIVATE_IP:8083/actuator/health; }
-    location = /health/payments { proxy_pass http://$NODE2_PRIVATE_IP:8085/actuator/health; }
+    location = /health/payments { proxy_pass http://$NODE3_PRIVATE_IP:8085/actuator/health; }
     location = /health/buyback { proxy_pass http://$NODE2_PRIVATE_IP:8086/actuator/health; }
 
     location ^~ /api/auth { proxy_pass http://auth-service:8081; }
@@ -46,7 +46,7 @@ server {
     location ^~ /api/cart { proxy_pass http://cart-service:8084; }
     location ^~ /api/wishlist { proxy_pass http://cart-service:8084; }
     location ^~ /api/orders { proxy_pass http://$NODE2_PRIVATE_IP:8083; }
-    location ^~ /api/payments { proxy_pass http://$NODE2_PRIVATE_IP:8085; }
+    location ^~ /api/payments { proxy_pass http://$NODE3_PRIVATE_IP:8085; }
     location ^~ /api/buybacks { proxy_pass http://$NODE2_PRIVATE_IP:8086; }
 
     location / {
