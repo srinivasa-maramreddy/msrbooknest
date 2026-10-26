@@ -1816,10 +1816,14 @@ main#top { scroll-margin-top: 94px; }
   .review-toolbar label { flex: 1 1 140px; }
   .review-toolbar select { width: 100%; }
   .review-card-top time { width: 100%; margin-left: 0; }
-  .wishlist-page-item { grid-template-columns: 82px minmax(0, 1fr); gap: 12px; padding: 11px; }
+  .wishlist-page { width: 100%; padding: 32px 14px 48px; }
+  .wishlist-page-item { grid-template-columns: 72px minmax(0, 1fr); gap: 10px; padding: 10px; }
   .wishlist-page-item > a .book-cover { width: 64px; height: 90px; }
-  .wishlist-page-item h2 { font-size: 15px; }
-  .wishlist-page-actions { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .wishlist-page-item > div { min-width: 0; overflow-wrap: anywhere; }
+  .wishlist-page-item h2 { font-size: 15px; overflow-wrap: anywhere; }
+  .wishlist-page-actions { width: 100%; align-items: stretch; flex-direction: column; gap: 7px; }
+  .wishlist-page-actions .button { width: 100%; justify-content: center; }
+  .wishlist-page-actions .text-link { align-self: flex-start; }
   .image-preview-panel { min-height: 290px; padding: 25px; }
   .image-preview-panel .book-cover { width: min(240px, 70vw); height: 335px; }
 }
@@ -2226,6 +2230,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     line-height: 1;
     vertical-align: middle;
   }
+  .header-actions .wishlist-header {
+    display: inline-flex;
+    width: 34px;
+    min-width: 34px;
+    padding: 0;
+  }
+  .header-actions .wishlist-header span { display: none; }
   .header-actions .account-action,
   .header-actions .sign-out-action {
     padding: 0 12px;
