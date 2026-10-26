@@ -18,6 +18,9 @@ public class User {
     @Column(unique = true)
     private String phoneNumber;
 
+    @Column(length = 1000)
+    private String address;
+
     @Column(nullable = false)
     private String password;
 
@@ -32,6 +35,7 @@ public class User {
     public String getName() { return name; }
     public String getEmail() { return email; }
     public String getPhoneNumber() { return phoneNumber; }
+    public String getAddress() { return address; }
     public String getPassword() { return password; }
     public Role getRole() { return role; }
     public boolean isEnabled() { return enabled; }
@@ -40,6 +44,7 @@ public class User {
     public void setName(String name) { this.name = name; }
     public void setEmail(String email) { this.email = email; }
     public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+    public void setAddress(String address) { this.address = address; }
     public void setPassword(String password) { this.password = password; }
     public void setRole(Role role) { this.role = role; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
