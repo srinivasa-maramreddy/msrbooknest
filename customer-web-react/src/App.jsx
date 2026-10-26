@@ -547,6 +547,7 @@ function AdCoverPhoto({ src, position, title, author }) {
     }} onError={() => updateStatus("failed")} />}
   </div>;
 }
+
 function BrandEmblem() {
   return <span className="brand-mark" aria-hidden="true"><img className="brand-emblem-image" src={`${import.meta.env.BASE_URL}msrbooknest-logo.png`} alt="" /></span>;
 }
@@ -1309,7 +1310,7 @@ function App() {
           otpCode: form.get("otpCode").trim(),
           newPassword: form.get("newPassword"),
           confirmPassword: form.get("confirmPassword"),
-        }, () => showToast("Waking the account service. Your password reset will continue automatically…"));
+        }, () => showToast("Waking the account service. Password reset will continue automatically…"));
         setAuthMode("login");
         setRecoveryIdentifier("");
         setRecoveryMaskedEmail("");
@@ -1347,7 +1348,7 @@ function App() {
       const response = await api.login({
         identifier: form.get("identifier").trim(),
         password: form.get("password"),
-      }, () => showToast("Waking the account service. Sign in will continue automatically…"));
+      }, () => showToast("Waking the account service. Sign-in will continue automatically…"));
       await completeAuthentication(response);
       showToast("Welcome back to the nest.");
     } catch (error) {
