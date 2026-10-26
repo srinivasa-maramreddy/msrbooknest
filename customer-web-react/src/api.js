@@ -1,4 +1,4 @@
-import { getAccessToken } from "./auth.js";
+import { clearSession, getAccessToken } from "./auth.js";
 import { demoApi } from "./demo-api.js";
 
 const hostedBackend = (import.meta.env.VITE_BACKEND_BASE_URL || "").replace(/\/+$/, "");
@@ -140,6 +140,10 @@ async function request(base, path, { token, warm, onWaking, ...options } = {}) {
     }
   }
   if (!response.ok) {
+    if (response.status === 401 && token) {
+      clearSession();
+      throw new Error("Your sign-in needs refreshing. Please sign in again to continue.");
+    }
     const message = body?.error || body?.message || `Request failed (${response.status})`;
     throw new Error(message);
   }
