@@ -27,6 +27,7 @@ services:
       APP_JWT_SECRET: ${APP_JWT_SECRET:?Set APP_JWT_SECRET in .env.lightsail}
       APP_WEB_ORIGINS: ${APP_WEB_ORIGINS:-https://srinivasa-maramreddy.github.io}
       APP_DEMO_SEED_USERS: "false"
+      APP_DEMO_SEED_READER: "true"
       APP_EMAIL_OTP_ENABLED: ${APP_EMAIL_OTP_ENABLED:-false}
       GMAIL_SENDER_EMAIL: ${GMAIL_SENDER_EMAIL:-}
       GMAIL_OAUTH_CLIENT_ID: ${GMAIL_OAUTH_CLIENT_ID:-}

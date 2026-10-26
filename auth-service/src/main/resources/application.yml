@@ -33,6 +33,7 @@ app:
     origins: ${APP_WEB_ORIGINS:http://localhost:5173}
   demo:
     seed-users: ${APP_DEMO_SEED_USERS:false}
+    seed-reader: ${APP_DEMO_SEED_READER:false}
   jwt:
     secret: ${APP_JWT_SECRET:msrbooknest-demo-signing-key-change-me}
     expiration-ms: 86400000
