@@ -1373,6 +1373,19 @@ function App() {
     navigate("/books");
   }
 
+  function browseMatchingBooks() {
+    setShowSuggestions(false);
+    setActiveShelf("all");
+    setActiveCategory("");
+    setActiveCategoryGroup("");
+    setActiveSubcategory("");
+    setDetailFilters({});
+    setConditionFilter("all");
+    setSortBy("featured");
+    setPage(1);
+    navigate("/books");
+  }
+
   function selectCategory(category, subcategory = "") {
     setActiveShelf("all");
     setActiveCategory(category);
@@ -1706,8 +1719,8 @@ function App() {
           <button className="header-menu-button" type="button" aria-label="Open navigation menu" aria-expanded={navigationOpen} aria-controls="site-navigation-drawer" onClick={() => setNavigationOpen(true)}><span aria-hidden="true">☰</span></button>
           <Link className="brand" to="/" aria-label="msrbooknest home"><BrandEmblem /><span>msrbooknest</span></Link>
         </div>
-        <label className="header-search"><span aria-hidden="true">⌕</span><input value={query} onFocus={() => setShowSuggestions(true)} onBlur={() => window.setTimeout(() => setShowSuggestions(false), 160)} onChange={(event) => { setQuery(event.target.value); setShowSuggestions(true); }} onKeyDown={(event) => { if (event.key === "Enter") { setShowSuggestions(false); goToCatalog("all"); } if (event.key === "Escape") setShowSuggestions(false); }} placeholder="Search books, authors, exams, classes…" aria-label="Search the bookstore" aria-autocomplete="list" aria-expanded={showSuggestions && suggestions.length > 0} />{query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}
-          {showSuggestions && suggestions.length > 0 && <div className="search-suggestions" role="listbox" aria-label="Book search suggestions">{suggestions.map((book) => <button key={book.id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(book.title); setShowSuggestions(false); goToCatalog("all"); }}><span><strong>{book.title}</strong><small>{book.author} · {book.category || "Book"}</small></span><b>{money.format(Number(book.price || 0))}</b></button>)}<button className="suggestions-all" type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { setShowSuggestions(false); goToCatalog("all"); }}>Browse all matching books ↗</button></div>}
+        <label className="header-search"><span aria-hidden="true">⌕</span><input value={query} onFocus={() => setShowSuggestions(true)} onBlur={() => window.setTimeout(() => setShowSuggestions(false), 160)} onChange={(event) => { setQuery(event.target.value); setShowSuggestions(true); }} onKeyDown={(event) => { if (event.key === "Enter") browseMatchingBooks(); if (event.key === "Escape") setShowSuggestions(false); }} placeholder="Search books, authors, exams, classes…" aria-label="Search the bookstore" aria-autocomplete="list" aria-expanded={showSuggestions && suggestions.length > 0} />{query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}
+          {showSuggestions && suggestions.length > 0 && <div className="search-suggestions" role="listbox" aria-label="Book search suggestions">{suggestions.map((book) => <button key={book.id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(book.title); browseMatchingBooks(); }}><span><strong>{book.title}</strong><small>{book.author} · {book.category || "Book"}</small></span><b>{money.format(Number(book.price || 0))}</b></button>)}<button className="suggestions-all" type="button" onMouseDown={(event) => event.preventDefault()} onClick={browseMatchingBooks}>Browse all matching books ↗</button></div>}
         </label>
         <nav className="main-nav" aria-label="Main navigation"><Link to="/books" onClick={() => goToCatalog("all")}>Books</Link><Link to="/categories" onClick={() => navigate("/categories")}>Categories</Link></nav>
         <div className={`header-actions${user ? " is-signed-in" : ""}`}>
