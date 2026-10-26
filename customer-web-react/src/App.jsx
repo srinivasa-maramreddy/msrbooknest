@@ -520,7 +520,10 @@ function Cover({ book, compact = false }) {
   const coverFailed = Boolean(imageUrl) && status === "failed";
   const coverLoaded = status === "loaded";
   const isOriginalCover = Boolean(imageUrl && coverLoaded && !coverFailed);
-  const demoCoverUrl = useMemo(() => createDemoCoverDataUrl(book), [book]);
+  const demoCoverUrl = useMemo(
+    () => createDemoCoverDataUrl(book),
+    [book.id, book.title, book.author, book.category, book.subcategory],
+  );
   return (
     <div className={`book-cover cover-${getCoverTone(book)}${isOriginalCover ? " book-cover-original" : " book-cover-illustrated"}${compact ? " cover-compact" : ""}`}>
       <img className="cover-demo-image" src={demoCoverUrl} alt={!imageUrl || coverFailed || !coverLoaded ? `Illustrative sample cover for ${book.title}` : ""} aria-hidden={Boolean(imageUrl && coverLoaded && !coverFailed)} />

@@ -1046,7 +1046,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 .book-cover-illustrated img { object-fit: contain; object-position: center; }
 .cover-demo-image { z-index: 1; }
-.cover-publisher-image { z-index: 2; opacity: 0; transition: none; }
+.cover-publisher-image { z-index: 2; opacity: 0; transition: opacity .22s ease; }
 .cover-publisher-image-loaded { opacity: 1; }
 
 .button-dark,
@@ -1100,7 +1100,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 .ad-cover-photo img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: contain; object-position: center; background: #fff; }
 .ad-cover-placeholder { z-index: 1; }
-.ad-cover-publisher { z-index: 2; opacity: 0; transition: none; }
+.ad-cover-publisher { z-index: 2; opacity: 0; transition: opacity .22s ease; }
 .ad-cover-publisher-loaded { opacity: 1; }
 .ad-cover-photo-one { top: 29px; left: calc(50% - 105px); transform: rotate(-12deg); }
 .ad-cover-photo-two { top: 48px; left: calc(50% - 3px); transform: rotate(9deg); }
@@ -1161,7 +1161,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .wishlist-header, .admin-header-action, .sign-out-action { min-height: 36px; border: 1px solid #e7dac6; border-radius: 999px; padding: 0 10px; color: #174b7a; background: #fff; font-size: 9px; font-weight: 600; white-space: nowrap; }
 .wishlist-header { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; }
 .wishlist-header span { font-size: 9px; }
-.wishlist-header b { min-width: 17px; height: 17px; display: inline-grid; place-items: center; border-radius: 50%; color: #17324f; background: #f2c744; font-size: 8px; }
+.wishlist-header b { min-width: 17px; height: 17px; display: inline-grid; place-items: center; border-radius: 50%; color: #fff; background: #c62838; font-size: 8px; }
 .sign-out-action:hover, .wishlist-header:hover, .admin-header-action:hover { border-color: #e4bd32; background: #fff8dc; }
 .sell-book-action { min-height: 36px; padding: 0 12px; }
 .account-action { min-height: 36px; padding: 0 11px; }
