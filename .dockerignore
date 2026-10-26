@@ -1,4 +1,5 @@
 .git
+.app_jwt_secret
 .idea
 **/target
 **/node_modules
