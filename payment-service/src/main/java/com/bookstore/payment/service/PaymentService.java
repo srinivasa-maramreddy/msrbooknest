@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
@@ -45,13 +46,22 @@ public class PaymentService {
                           RestClient.Builder restClientBuilder,
                           ObjectMapper objectMapper,
                           MockNpciGateway mockNpciGateway,
-                          @Value("${app.services.order-base-url:http://localhost:8083}") String orderBaseUrl) {
+                          @Value("${app.services.order-base-url:http://localhost:8083}") String orderBaseUrl,
+                          @Value("${app.services.order-connect-timeout-ms:2000}") int orderConnectTimeoutMs,
+                          @Value("${app.services.order-read-timeout-ms:5000}") int orderReadTimeoutMs) {
         this.paymentRepository = paymentRepository;
         this.webhookRepository = webhookRepository;
         this.store = store;
         this.gateway = gateway;
         this.eventPublisher = eventPublisher;
-        this.orderClient = restClientBuilder.baseUrl(orderBaseUrl).build();
+        if (orderConnectTimeoutMs <= 0 || orderReadTimeoutMs <= 0) {
+            throw new IllegalArgumentException("Order service timeouts must be positive");
+        }
+        SimpleClientHttpRequestFactory orderRequestFactory = new SimpleClientHttpRequestFactory();
+        orderRequestFactory.setConnectTimeout(orderConnectTimeoutMs);
+        orderRequestFactory.setReadTimeout(orderReadTimeoutMs);
+        this.orderClient = restClientBuilder.clone().baseUrl(orderBaseUrl)
+                .requestFactory(orderRequestFactory).build();
         this.objectMapper = objectMapper;
         this.mockNpciGateway = mockNpciGateway;
     }

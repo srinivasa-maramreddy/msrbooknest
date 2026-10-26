@@ -76,11 +76,11 @@ services:
       RAZORPAY_ENABLED: "false"
       RAZORPAY_ALLOW_LIVE: "false"
       SPRING_JPA_SHOW_SQL: "false"
-      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx160m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -Xss512k"
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx160m -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -Xss512k"
     depends_on:
       - kafka
       - order-service
-    mem_limit: 352m
+    mem_limit: 416m
 
   buyback-service:
     build:
