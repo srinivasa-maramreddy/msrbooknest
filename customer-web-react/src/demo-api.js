@@ -257,6 +257,30 @@ function demoPaymentView(order, attempt) {
 }
 
 export const demoApi = {
+  async getProfile() {
+    const session = requireUser();
+    const user = findUser(session.email);
+    if (!user) throw new Error("Your demo profile was not found. Sign in again.");
+    return { id: user.email, name: user.name, email: user.email, phoneNumber: user.phoneNumber || "", address: user.address || "", role: user.role };
+  },
+
+  async updateProfile(_token, draft) {
+    const session = requireUser();
+    const user = findUser(session.email);
+    if (!user) throw new Error("Your demo profile was not found. Sign in again.");
+    const name = String(draft.name || "").trim();
+    let phoneNumber = String(draft.phoneNumber || "").replace(/[\s()+-]/g, "");
+    if (phoneNumber.startsWith("91") && phoneNumber.length === 12) phoneNumber = phoneNumber.slice(2);
+    if (phoneNumber.startsWith("0") && phoneNumber.length === 11) phoneNumber = phoneNumber.slice(1);
+    if (!name || name.length > 100) throw new Error("Enter your name using at most 100 characters.");
+    if (phoneNumber && !/^[6-9]\d{9}$/.test(phoneNumber)) throw new Error("Enter a valid 10-digit Indian mobile number.");
+    if (phoneNumber && savedUsers().some((other) => other.email !== user.email && other.phoneNumber === phoneNumber)) throw new Error("This mobile number is already linked to an account.");
+    const address = String(draft.address || "").trim();
+    if (address.length > 1000) throw new Error("Keep the delivery address under 1000 characters.");
+    saveUser({ ...user, name, phoneNumber, address });
+    return this.getProfile();
+  },
+
   async login({ identifier, password }) {
     const user = findUser(identifier);
     if (!user || user.password !== password) throw new Error("Use a demo account shown here, or create a local demo account.");

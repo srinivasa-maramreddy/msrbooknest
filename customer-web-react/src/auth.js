@@ -67,6 +67,13 @@ export function clearSession() {
   notify();
 }
 
+export function updateSessionProfile(profile) {
+  const existing = getIdentity();
+  if (!existing || existing.email.toLowerCase() !== String(profile.email || "").toLowerCase()) return;
+  localStorage.setItem(USER_KEY, JSON.stringify({ email: existing.email, role: existing.role, name: profile.name || existing.name }));
+  notify();
+}
+
 export function subscribeIdentity(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);

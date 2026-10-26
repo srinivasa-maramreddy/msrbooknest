@@ -1,5 +1,6 @@
 import { clearSession, getAccessToken } from "./auth.js";
 import { demoApi } from "./demo-api.js";
+import { fetchTextWithDeadline, RequestTimeoutError } from "./http.js";
 
 const hostedBackend = (import.meta.env.VITE_BACKEND_BASE_URL || "").replace(/\/+$/, "");
 const serviceWarmup = new Map();
@@ -94,6 +95,9 @@ async function warmEndpoint(key, url, label, onWaking) {
 
 async function warmService(service, onWaking) {
   if (!hostedBackend) return;
+  // The Lightsail gateway and its services stay running. Readiness polling on
+  // this deployment adds a second failure path and can block checkout for minutes.
+  if (usesUnifiedGateway) return;
   if (service !== "gateway" && !directHealthUrls[service]) {
     throw new Error(`Unknown bookstore service: ${service}`);
   }
@@ -111,7 +115,7 @@ async function warmService(service, onWaking) {
   }
 }
 
-async function request(base, path, { token, warm, onWaking, ...options } = {}) {
+async function request(base, path, { token, warm, onWaking, timeoutMs, ...options } = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -124,13 +128,14 @@ async function request(base, path, { token, warm, onWaking, ...options } = {}) {
   if (warm) await Promise.all((Array.isArray(warm) ? warm : [warm]).map((service) => warmService(service, onWaking)));
 
   let response;
+  let raw;
   try {
-    response = await fetch(`${base}${path}`, { ...options, headers });
-  } catch {
+    ({ response, raw } = await fetchTextWithDeadline(`${base}${path}`, { ...options, headers }, timeoutMs));
+  } catch (error) {
+    if (error instanceof RequestTimeoutError || error.name === "AbortError") throw error;
     throw new Error("The bookstore service did not respond. It may be waking up after inactivity; please try again shortly.");
   }
 
-  const raw = await response.text();
   let body = null;
   if (raw) {
     try {
@@ -145,7 +150,9 @@ async function request(base, path, { token, warm, onWaking, ...options } = {}) {
       throw new Error("Your sign-in needs refreshing. Please sign in again to continue.");
     }
     const message = body?.error || body?.message || `Request failed (${response.status})`;
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   return body;
 }
@@ -153,6 +160,8 @@ async function request(base, path, { token, warm, onWaking, ...options } = {}) {
 const json = (method, payload) => ({ method, body: JSON.stringify(payload) });
 
 const springApi = {
+  getProfile: (token) => request(API.auth, "/api/auth/profile", { token }),
+  updateProfile: (token, payload) => request(API.auth, "/api/auth/profile", { ...json("PUT", payload), token }),
   login: (payload, onWaking) => request(API.auth, "/api/auth/login", { ...json("POST", payload), warm: "auth", onWaking }),
   startPasswordRecovery: (payload, onWaking) => request(API.auth, "/api/auth/password/forgot", { ...json("POST", payload), warm: "auth", onWaking }),
   resetPassword: (payload, onWaking) => request(API.auth, "/api/auth/password/reset", { ...json("POST", payload), warm: "auth", onWaking }),
@@ -187,7 +196,7 @@ const springApi = {
   placeOrder: (token, payload, idempotencyKey, onWaking) => request(API.order, "/api/orders", {
     ...json("POST", payload), token, warm: ["orders", "catalog"], onWaking, headers: { "Idempotency-Key": idempotencyKey },
   }),
-  getOwnedOrder: (token, orderRequestId) => request(API.order, `/api/orders/me/reference/${encodeURIComponent(orderRequestId)}`, { token }),
+  getOwnedOrder: (token, orderRequestId, options = {}) => request(API.order, `/api/orders/me/reference/${encodeURIComponent(orderRequestId)}`, { token, timeoutMs: 15_000, ...options }),
   createPaymentOrder: (token, orderRequestId, attemptRequestId, idempotencyKey, onWaking) => request(API.payment, "/api/payments/create", {
     ...json("POST", { orderRequestId, attemptRequestId }), token, warm: "payments", onWaking, headers: { "Idempotency-Key": idempotencyKey },
   }),
@@ -195,7 +204,7 @@ const springApi = {
     ...json("POST", { orderRequestId, attemptRequestId, vpa }), token, warm: "payments", onWaking, headers: { "Idempotency-Key": attemptRequestId },
   }),
   verifyPayment: (token, payload, onWaking) => request(API.payment, "/api/payments/verify", { ...json("POST", payload), token, warm: "payments", onWaking }),
-  getPaymentStatus: (token, orderRequestId) => request(API.payment, `/api/payments/orders/${encodeURIComponent(orderRequestId)}/status`, { token, warm: "payments" }),
+  getPaymentStatus: (token, orderRequestId, options = {}) => request(API.payment, `/api/payments/orders/${encodeURIComponent(orderRequestId)}/status`, { token, timeoutMs: 12_000, ...options }),
   getBuybacks: (token) => request(API.buyback, "/api/buybacks", { token }),
   createBuyback: (token, payload) => request(API.buyback, "/api/buybacks", { ...json("POST", payload), token }),
   startBuybackReview: (token, id, note) => request(API.buyback, `/api/buybacks/${id}/review`, { ...json("POST", { note }), token }),

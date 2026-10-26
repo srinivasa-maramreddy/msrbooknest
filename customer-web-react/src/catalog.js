@@ -19,7 +19,9 @@ export const BOOK_PAGE_SIZE = 24;
 
 export function readBookSpecifications(book) {
   try {
-    return JSON.parse(book?.specifications || "{}");
+    const specifications = typeof book?.specifications === "string"
+      ? JSON.parse(book.specifications || "{}") : book?.specifications;
+    return specifications && typeof specifications === "object" && !Array.isArray(specifications) ? specifications : {};
   } catch {
     return {};
   }

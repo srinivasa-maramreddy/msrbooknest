@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, isBrowserDemo } from "./api.js";
-import { clearSession, getAccessToken, getIdentity, saveSession, subscribeIdentity } from "./auth.js";
+import { clearSession, getAccessToken, getIdentity, saveSession, subscribeIdentity, updateSessionProfile } from "./auth.js";
 import BuybackDashboard from "./BuybackDashboard.jsx";
+import AccountDashboard from "./AccountDashboard.jsx";
+import { useAccountProfile } from "./useAccountProfile.js";
 import { BOOK_PAGE_SIZE, CATALOG_CATEGORIES, readBookSpecifications } from "./catalog.js";
+import { FACET_LABELS, catalogGroupForPath, facetOptions, filterCatalog } from "./catalog-filters.js";
 
 const STATIC_PAGES_DEMO = isBrowserDemo;
 const MOCK_NPCI_CHECKOUT = !STATIC_PAGES_DEMO && import.meta.env.VITE_MOCK_NPCI === "true";
@@ -145,7 +148,10 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [paymentStatusError, setPaymentStatusError] = useState("");
+  const [checkoutReload, setCheckoutReload] = useState(0);
   const successHandled = useRef(false);
+  const paymentActionInFlight = useRef(false);
   const isVerifiedSuccess = payment?.status === "SUCCESS"
     && (payment?.verificationStatus === "VERIFIED" || (STATIC_PAGES_DEMO && payment?.verificationStatus === "SIMULATED"));
 
@@ -156,39 +162,58 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
       return undefined;
     }
     let cancelled = false;
+    const controller = new AbortController();
+    successHandled.current = false;
     setLoading(true);
+    setOrder(null);
+    setPayment(null);
+    setAttemptRequestId(storedPaymentAttemptId(orderRequestId));
     setError("");
-    Promise.all([
-      api.getOwnedOrder(token, orderRequestId),
-      api.getPaymentStatus(token, orderRequestId).catch(() => null),
-    ]).then(([ownedOrder, paymentStatus]) => {
+    setNotice("");
+    setPaymentStatusError("");
+    setChecking(true);
+
+    // Display the owned order as soon as it is available. The optional payment
+    // lookup has its own bounded state and must not hold the whole page open.
+    api.getOwnedOrder(token, orderRequestId, { signal: controller.signal }).then((ownedOrder) => {
       if (cancelled) return;
       setOrder(ownedOrder);
+    }).catch((loadError) => {
+      if (!cancelled) setError(loadError.message || "We could not load this order.");
+    }).finally(() => { if (!cancelled) setLoading(false); });
+
+    api.getPaymentStatus(token, orderRequestId, { signal: controller.signal }).then((paymentStatus) => {
+      if (cancelled) return;
+      // Opening an old receipt must not remove books added to the bag later.
+      // Reconcile only a payment that becomes successful during this visit.
+      if (paymentStatus?.status === "SUCCESS") successHandled.current = true;
       setPayment(paymentStatus);
       const savedAttemptId = paymentStatus?.attemptRequestId || storedPaymentAttemptId(orderRequestId);
       setAttemptRequestId(savedAttemptId);
       if (paymentStatus?.attemptRequestId) rememberPaymentAttemptId(orderRequestId, paymentStatus.attemptRequestId);
       if (paymentStatus?.status === "PENDING") setNotice("Verifying your payment. Please wait...");
-    }).catch((loadError) => {
-      if (!cancelled) setError(loadError.message || "We could not load this order.");
-    }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [token, orderRequestId]);
+    }).catch((statusError) => {
+      if (cancelled || statusError.status === 404) return;
+      setPaymentStatusError(statusError.message || "We could not check the existing payment.");
+    }).finally(() => { if (!cancelled) setChecking(false); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [token, orderRequestId, checkoutReload]);
 
   useEffect(() => {
-    if (isVerifiedSuccess && !successHandled.current) {
+    if (isVerifiedSuccess && order && !successHandled.current) {
       successHandled.current = true;
-      onPaymentSuccess?.();
+      onPaymentSuccess?.(order);
     }
-  }, [isVerifiedSuccess, onPaymentSuccess]);
+  }, [isVerifiedSuccess, order, onPaymentSuccess]);
 
   async function reconcilePayment({ quiet = false } = {}) {
     if (!token || !orderRequestId) return null;
-    if (!quiet) setChecking(true);
+    setChecking(true);
     setNotice("Verifying your payment. Please wait...");
     try {
       const result = await api.getPaymentStatus(token, orderRequestId);
       setPayment(result);
+      setPaymentStatusError("");
       if (result?.attemptRequestId) {
         setAttemptRequestId(result.attemptRequestId);
         rememberPaymentAttemptId(orderRequestId, result.attemptRequestId);
@@ -198,16 +223,25 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
       else setNotice("");
       return result;
     } catch (checkError) {
+      if (checkError.status === 404) {
+        setPayment(null);
+        setPaymentStatusError("");
+        setError("");
+        setNotice("No payment has been started for this order. You can continue below.");
+        return null;
+      }
+      setPaymentStatusError(checkError.message || "Payment status is not available yet.");
       setNotice("We couldn't verify your payment yet. Your payment status is being checked.");
       if (!quiet) setError(checkError.message || "Payment status is not available yet.");
       return null;
     } finally {
-      if (!quiet) setChecking(false);
+      setChecking(false);
     }
   }
 
   async function continueToPay() {
-    if (!order || !token || busy) return;
+    if (!order || !token || busy || paymentActionInFlight.current || checking || paymentStatusError) return;
+    paymentActionInFlight.current = true;
     setBusy(true);
     setError("");
     setNotice("Preparing secure UPI checkout…");
@@ -292,12 +326,14 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
       setError(paymentError.message || "Secure checkout is unavailable right now.");
       setNotice("Your order remains pending. Retry with the same order reference or check payment status.");
     } finally {
+      paymentActionInFlight.current = false;
       setBusy(false);
     }
   }
 
   async function completeBrowserDemoPayment(outcome) {
-    if (!STATIC_PAGES_DEMO || !order || !token || !attemptRequestId || busy) return;
+    if (!STATIC_PAGES_DEMO || !order || !token || !attemptRequestId || busy || paymentActionInFlight.current || checking || paymentStatusError) return;
+    paymentActionInFlight.current = true;
     setBusy(true);
     setError("");
     setNotice("Saving the simulated payment result…");
@@ -308,12 +344,14 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
     } catch (paymentError) {
       setError(paymentError.message || "The demo payment could not be completed.");
     } finally {
+      paymentActionInFlight.current = false;
       setBusy(false);
     }
   }
 
   async function completeHostedMockPayment(outcome) {
-    if (!MOCK_NPCI_CHECKOUT || !order || !token || busy) return;
+    if (!MOCK_NPCI_CHECKOUT || !order || !token || busy || paymentActionInFlight.current || checking || paymentStatusError) return;
+    paymentActionInFlight.current = true;
     setBusy(true);
     setError("");
     setNotice("Sending a simulated UPI collect request to the backend…");
@@ -331,12 +369,13 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
     } catch (paymentError) {
       setError(paymentError.message || "The NPCI demo simulator is unavailable right now.");
     } finally {
+      paymentActionInFlight.current = false;
       setBusy(false);
     }
   }
 
-  if (loading) return <section className="route-content payment-page"><div className="payment-state-card">Loading your secure checkout…</div></section>;
-  if (error && !order) return <section className="route-content payment-page"><div className="route-page-heading"><span className="eyebrow">SECURE CHECKOUT</span><h1>Order unavailable</h1><p>{error}</p></div><button className="button button-dark" onClick={() => navigate("/cart")}>Return to cart</button></section>;
+  if (loading) return <section className="route-content payment-page"><div className="payment-state-card" role="status"><h1>Loading your secure checkout…</h1><p>Getting your order details. This should take only a few seconds.</p><button className="button button-outline" type="button" onClick={() => navigate("/cart")}>Return to bag</button></div></section>;
+  if (error && !order) return <section className="route-content payment-page"><div className="route-page-heading"><span className="eyebrow">SECURE CHECKOUT</span><h1>We could not load this checkout</h1><p role="alert">{error}</p><p>Your existing order reference is <strong>{orderRequestId}</strong>. Retrying opens the same order.</p></div><div className="payment-result-actions"><button className="button button-dark" type="button" onClick={() => setCheckoutReload((value) => value + 1)}>Retry loading checkout</button><button className="button button-outline" onClick={() => navigate("/cart")}>Return to bag</button></div></section>;
   if (!order) return null;
 
   const amount = Number(order.totalAmount || 0);
@@ -346,10 +385,12 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
   return (
     <section className="route-content payment-page">
       <div className="payment-page-heading"><span className="eyebrow">{DEMO_PAYMENT ? "MSRBOOKNEST · DEMO CHECKOUT" : "MSRBOOKNEST · SECURE CHECKOUT"}</span><h1>{phase === "success" ? "Payment successful." : phase === "failed" ? "Payment failed." : phase === "cancelled" ? "Payment cancelled." : phase === "pending" ? "Payment is processing." : DEMO_PAYMENT ? "Try a simulated payment." : "Choose how to pay."}</h1><p>Order reference <strong>{orderRequestId}</strong></p></div>
+      {checking && <div className="payment-inline-notice" role="status">Checking whether this order already has a payment…</div>}
+      {paymentStatusError && <div className="payment-inline-error" role="alert"><p>{paymentStatusError}</p><p>Confirm the existing payment status before starting another attempt.</p><button className="button button-outline" type="button" disabled={checking} onClick={() => reconcilePayment()}>Retry payment status</button></div>}
       {phase === "success" ? (
         <div className="payment-result-card payment-result-success"><span className="payment-result-icon" aria-hidden="true">✓</span><span className="eyebrow">{DEMO_PAYMENT ? "DEMO PAYMENT COMPLETE" : "PAYMENT VERIFIED"}</span><h2>{DEMO_PAYMENT ? "Simulated payment complete" : "Payment Successful"}</h2><p>{STATIC_PAGES_DEMO ? "This browser-only demo marked the payment successful. No real money was charged." : MOCK_NPCI_CHECKOUT ? "The Spring Payment service recorded an approved NPCI mock result. No real money was charged." : "Razorpay confirmed this UPI payment. Your order is now being prepared."}</p><dl><div><dt>Order ID</dt><dd>{orderRequestId}</dd></div><div><dt>{DEMO_PAYMENT ? "Demo reference" : "Transaction reference"}</dt><dd>{payment?.gatewayPaymentId || payment?.providerReference || payment?.attemptRequestId || "Verified by Razorpay"}</dd></div><div><dt>Amount {DEMO_PAYMENT ? "shown" : "paid"}</dt><dd>{moneyExact.format(amount)}</dd></div><div><dt>Payment method</dt><dd>UPI</dd></div><div><dt>{DEMO_PAYMENT ? "Demo date" : "Payment date"}</dt><dd>{payment?.paidAt || payment?.completedAt ? new Date(payment.paidAt || payment.completedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Just now"}</dd></div><div><dt>Delivery address</dt><dd>{order.address}</dd></div></dl><div className="payment-result-actions"><button className="button button-dark" onClick={() => navigate("/orders")}>View order</button><button className="button button-outline" onClick={() => navigate("/books")}>Continue shopping</button></div></div>
       ) : phase === "failed" || phase === "cancelled" ? (
-        <div className={`payment-result-card payment-result-${phase}`}><span className="payment-result-icon" aria-hidden="true">{phase === "failed" ? "!" : "↺"}</span><span className="eyebrow">ORDER {phase === "failed" ? "NOT PAID" : "STATUS CHECKED"}</span><h2>Payment {phase === "failed" ? "Failed" : "Cancelled"}</h2><p>{payment?.message || (phase === "failed" ? (DEMO_PAYMENT ? "The simulated payment failed. No charge was made; you can retry." : "Razorpay reports that this attempt was not completed.") : "Checkout was closed. We checked with Razorpay before showing this status.")}</p><strong className="payment-result-amount">{moneyExact.format(amount)}</strong><p>Order reference: <strong>{orderRequestId}</strong></p><div className="payment-result-actions"><button className="button button-dark" onClick={MOCK_NPCI_CHECKOUT ? () => completeHostedMockPayment("SUCCESS") : continueToPay} disabled={busy || modalOpen}>{busy ? "Preparing checkout…" : modalOpen ? "Razorpay checkout is open…" : MOCK_NPCI_CHECKOUT ? "Retry mock payment" : "Retry payment"}</button><button className="button button-outline" onClick={() => navigate("/cart")}>Return to cart</button>{!STATIC_PAGES_DEMO && <button className="text-link" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking…" : "Check status"}</button>}</div></div>
+        <div className={`payment-result-card payment-result-${phase}`}><span className="payment-result-icon" aria-hidden="true">{phase === "failed" ? "!" : "↺"}</span><span className="eyebrow">ORDER {phase === "failed" ? "NOT PAID" : "STATUS CHECKED"}</span><h2>Payment {phase === "failed" ? "Failed" : "Cancelled"}</h2><p>{payment?.message || (phase === "failed" ? (DEMO_PAYMENT ? "The simulated payment failed. No charge was made; you can retry." : "Razorpay reports that this attempt was not completed.") : "Checkout was closed. We checked with Razorpay before showing this status.")}</p><strong className="payment-result-amount">{moneyExact.format(amount)}</strong><p>Order reference: <strong>{orderRequestId}</strong></p><div className="payment-result-actions"><button className="button button-dark" onClick={MOCK_NPCI_CHECKOUT ? () => completeHostedMockPayment("SUCCESS") : continueToPay} disabled={busy || modalOpen || checking || Boolean(paymentStatusError)}>{busy ? "Preparing checkout…" : modalOpen ? "Razorpay checkout is open…" : MOCK_NPCI_CHECKOUT ? "Retry mock payment" : "Retry payment"}</button><button className="button button-outline" onClick={() => navigate("/cart")}>Return to cart</button>{!STATIC_PAGES_DEMO && <button className="text-link" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking…" : "Check status"}</button>}</div></div>
       ) : phase === "pending" ? (
         <div className="payment-result-card payment-result-pending"><span className="payment-result-icon" aria-hidden="true">…</span><span className="eyebrow">PLEASE WAIT</span><h2>Payment is Processing</h2><p>{notice || "We couldn't verify your payment yet. Your payment status is being checked."}</p><strong className="payment-result-amount">{moneyExact.format(amount)}</strong><p>Order reference: <strong>{orderRequestId}</strong></p><div className="payment-result-actions"><button className="button button-dark" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking…" : "Check payment status"}</button><button className="button button-outline" onClick={() => navigate("/orders")}>View orders</button></div><small>Do not start a second order. This checkout reference stays the same while Razorpay confirms the result.</small></div>
       ) : (
@@ -362,15 +403,15 @@ function PaymentPage({ token, user, cartItems, catalogBooks, onPaymentSuccess })
               {error && <div className="payment-inline-error" role="alert">{error}</div>}
               {STATIC_PAGES_DEMO
                 ? payment?.demoOnly && payment?.status === "READY"
-                  ? <div className="payment-demo-actions"><button className="button button-yellow payment-continue-button" onClick={() => completeBrowserDemoPayment("SUCCESS")} disabled={busy}>{busy ? "Saving demo result…" : "Simulate successful payment"}</button><button className="button button-outline payment-continue-button" onClick={() => completeBrowserDemoPayment("FAILED")} disabled={busy}>{busy ? "Saving demo result…" : "Simulate failed payment"}</button></div>
-                  : <button className="button button-yellow payment-continue-button" onClick={continueToPay} disabled={busy}>{busy ? "Preparing demo checkout…" : "Begin demo payment"}</button>
-                : <div className="payment-demo-actions"><button className="button button-yellow payment-continue-button" onClick={() => completeHostedMockPayment("SUCCESS")} disabled={busy}>{busy ? "Saving demo result…" : "Simulate successful payment"}</button><button className="button button-outline payment-continue-button" onClick={() => completeHostedMockPayment("FAILED")} disabled={busy}>{busy ? "Saving demo result…" : "Simulate failed payment"}</button></div>}
+                  ? <div className="payment-demo-actions"><button className="button button-yellow payment-continue-button" onClick={() => completeBrowserDemoPayment("SUCCESS")} disabled={busy || checking || Boolean(paymentStatusError)}>{busy ? "Saving demo result…" : "Simulate successful payment"}</button><button className="button button-outline payment-continue-button" onClick={() => completeBrowserDemoPayment("FAILED")} disabled={busy || checking || Boolean(paymentStatusError)}>{busy ? "Saving demo result…" : "Simulate failed payment"}</button></div>
+                  : <button className="button button-yellow payment-continue-button" onClick={continueToPay} disabled={busy || checking || Boolean(paymentStatusError)}>{busy ? "Preparing demo checkout…" : "Begin demo payment"}</button>
+                : <div className="payment-demo-actions"><button className="button button-yellow payment-continue-button" onClick={() => completeHostedMockPayment("SUCCESS")} disabled={busy || checking || Boolean(paymentStatusError)}>{busy ? "Saving demo result…" : "Simulate successful payment"}</button><button className="button button-outline payment-continue-button" onClick={() => completeHostedMockPayment("FAILED")} disabled={busy || checking || Boolean(paymentStatusError)}>{busy ? "Saving demo result…" : "Simulate failed payment"}</button></div>}
             </> : <>
             <article className="payment-method-card"><span className="payment-step">1</span><div className="payment-card-content"><div className="payment-card-title"><span className="upi-icon" aria-hidden="true">UPI</span><div><h2>Pay by UPI</h2><p>Use a UPI app, intent, or QR option offered by secure checkout.</p></div></div><div className="upi-brands" aria-label="UPI apps supported by Razorpay where available"><span>G Pay</span><span>PhonePe</span><span>Paytm</span><small>Availability depends on your device and checkout options.</small></div></div><span className="payment-selected-check" aria-label="Selected">✓</span></article>
             <div className="payment-security-note"><span aria-hidden="true">⌑</span><p><strong>Secure payment checkout</strong><br />You will continue to Razorpay’s official checkout to authorize the payment. MSRBookNest never asks for your UPI PIN or banking password.</p></div>
             {notice && <div className="payment-inline-notice" role="status">{notice}</div>}
             {error && <div className="payment-inline-error" role="alert">{error}</div>}
-            <button className="button button-yellow payment-continue-button" onClick={continueToPay} disabled={busy || modalOpen}>{busy ? "Preparing secure checkout…" : modalOpen ? "Razorpay checkout is open…" : `Continue to Pay · ${moneyExact.format(amount)}`}</button>
+            <button className="button button-yellow payment-continue-button" onClick={continueToPay} disabled={busy || modalOpen || checking || Boolean(paymentStatusError)}>{busy ? "Preparing secure checkout…" : modalOpen ? "Razorpay checkout is open…" : `Continue to Pay · ${moneyExact.format(amount)}`}</button>
             <button className="payment-check-link" onClick={() => reconcilePayment()} disabled={checking}>{checking ? "Checking with Razorpay…" : "Already paid? Check payment status"}</button>
             </>}
           </div>
@@ -525,8 +566,7 @@ function App() {
   const [activeCategory, setActiveCategory] = useState("");
   const [activeCategoryGroup, setActiveCategoryGroup] = useState("");
   const [activeSubcategory, setActiveSubcategory] = useState("");
-  const [facetKey, setFacetKey] = useState("");
-  const [facetValue, setFacetValue] = useState("");
+  const [detailFilters, setDetailFilters] = useState({});
   const [conditionFilter, setConditionFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -563,6 +603,7 @@ function App() {
   const [cart, setCart] = useState(readStoredCart);
   const [token, setToken] = useState("");
   const [user, setUser] = useState(getIdentity);
+  const account = useAccountProfile(token);
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -598,26 +639,15 @@ function App() {
 
   useEffect(() => {
     setNavigationOpen(false);
-    if (location.pathname === "/categories/academic") {
-      setActiveCategoryGroup("academic");
+    const routeGroup = catalogGroupForPath(location.pathname, activeCategoryGroup);
+    if (routeGroup !== activeCategoryGroup) {
+      setActiveCategoryGroup(routeGroup);
       setActiveCategory("");
       setActiveShelf("all");
       setActiveSubcategory("");
-      setFacetKey("");
-      setFacetValue("");
+      setDetailFilters({});
       setConditionFilter("all");
       setQuery("");
-    } else if (location.pathname === "/categories/fiction") {
-      setActiveCategoryGroup("fiction");
-      setActiveCategory("");
-      setActiveShelf("all");
-      setActiveSubcategory("");
-      setFacetKey("");
-      setFacetValue("");
-      setConditionFilter("all");
-      setQuery("");
-    } else if (location.pathname === "/books") {
-      setActiveCategoryGroup("");
     }
     if (authRoute) {
       setAuthMode(location.pathname === "/register" ? "register" : "login");
@@ -667,13 +697,21 @@ function App() {
     }
   }, [token]);
 
-  const handlePaymentSuccess = useCallback(async () => {
+  const handlePaymentSuccess = useCallback(async (paidOrder) => {
     if (!token) return;
     try {
-      await api.clearCart(token);
-      setCart([]);
+      let updated = await api.getCart(token);
+      for (const purchased of paidOrder?.items || []) {
+        const item = updated.find((entry) => String(entry.bookId) === String(purchased.bookId));
+        if (!item) continue;
+        const remaining = Math.max(0, Number(item.quantity) - Number(purchased.quantity));
+        updated = remaining
+          ? await api.updateCartItem(token, item.bookId, remaining)
+          : await api.removeCartItem(token, item.bookId);
+      }
+      setCart(Array.isArray(updated) ? updated : []);
     } catch {
-      showToast("Payment is verified. Your order is safe, but the bag could not be cleared yet.");
+      showToast("Payment is complete. Your order is safe; refresh your bag before another checkout.");
     }
     await loadOrders(token);
   }, [token, loadOrders]);
@@ -841,62 +879,28 @@ function App() {
   }, [orders, token, loadOrders]);
 
   const selectedBookGroup = BOOK_GROUPS.find((shelf) => shelf.id === activeCategoryGroup);
-  const activeCategoryLabel = selectedBookGroup?.label || activeCategory;
-  const selectedGroupOptions = selectedBookGroup?.filterKey ? [...new Set(books
-    .filter((book) => selectedBookGroup.categories.includes(book.category))
-    .map((book) => readBookSpecifications(book)[selectedBookGroup.filterKey])
-    .filter(Boolean).map(String))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })) : [];
-  const filteredBooks = useMemo(() => {
-    let result = books.filter((book) => {
-      const term = query.trim().toLowerCase();
-      const specs = readBookSpecifications(book);
-      const matchesQuery = !term || `${book.title} ${book.author} ${book.category || ""} ${book.subcategory || ""} ${book.publisher || ""} ${book.description || ""} ${book.specifications || ""}`.toLowerCase().includes(term);
-      const matchesShelf = activeShelf === "all"
-        || (activeShelf === "new" && book.isNewArrival)
-        || (activeShelf === "bestsellers" && book.isBestSeller)
-        || (activeShelf === "under99" && Number(book.price) < 100)
-        || (activeShelf === "under199" && Number(book.price) < 200)
-        || (activeShelf === "under299" && Number(book.price) < 300)
-        || (activeShelf === "under400" && Number(book.price) < 400)
-        || (activeShelf === "examPrep" && isExamPrepBook(book));
-      const matchesCategory = activeCategoryGroup
-        ? Boolean(selectedBookGroup?.categories.includes(book.category))
-        : (!activeCategory || book.category === activeCategory);
-      const matchesSubcategory = !activeSubcategory || book.subcategory === activeSubcategory;
-      const matchesFacet = !facetKey || !facetValue || String(specs[facetKey] ?? "") === facetValue;
-      const matchesCondition = conditionFilter === "all" || (book.conditionLabel || "New") === conditionFilter;
-      return matchesQuery && matchesShelf && matchesCategory && matchesSubcategory && matchesFacet && matchesCondition;
-    });
-    if (sortBy === "price-low") result = [...result].sort((a, b) => a.price - b.price);
-    if (sortBy === "price-high") result = [...result].sort((a, b) => b.price - a.price);
-    if (sortBy === "title") result = [...result].sort((a, b) => a.title.localeCompare(b.title));
-    if (sortBy === "featured" && activeCategory === "School Books") {
-      result = [...result].sort((a, b) => Number(!(a.isbn && a.imageUrl)) - Number(!(b.isbn && b.imageUrl)));
-    }
-    return result;
-  }, [books, query, activeShelf, sortBy, activeCategory, activeCategoryGroup, selectedBookGroup, activeSubcategory, facetKey, facetValue, conditionFilter]);
+  const activeCategoryLabel = activeCategory || selectedBookGroup?.label;
+  const filteredBooks = useMemo(() => filterCatalog(books, {
+    query, shelf: activeShelf, category: activeCategory, groupId: activeCategoryGroup,
+    subcategory: activeSubcategory, facets: detailFilters, condition: conditionFilter, sort: sortBy,
+  }, BOOK_GROUPS), [books, query, activeShelf, sortBy, activeCategory, activeCategoryGroup, activeSubcategory, detailFilters, conditionFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredBooks.length / BOOK_PAGE_SIZE));
-  const visibleBooks = filteredBooks.slice((page - 1) * BOOK_PAGE_SIZE, page * BOOK_PAGE_SIZE);
+  const currentPage = Math.min(page, totalPages);
+  const visibleBooks = filteredBooks.slice((currentPage - 1) * BOOK_PAGE_SIZE, currentPage * BOOK_PAGE_SIZE);
   const wishlistBooks = books.filter((book) => isWishlisted(book.id));
   const suggestions = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (term.length < 2) return [];
     return books.filter((book) => `${book.title} ${book.author} ${book.category || ""} ${book.subcategory || ""}`.toLowerCase().includes(term)).slice(0, 6);
   }, [books, query]);
-  const availableSubcategories = useMemo(() => [...new Set(books
-    .filter((book) => activeCategoryGroup
-      ? Boolean(selectedBookGroup?.categories.includes(book.category))
-      : (!activeCategory || book.category === activeCategory))
-    .map((book) => book.subcategory).filter(Boolean))].sort(), [books, activeCategory, activeCategoryGroup, selectedBookGroup]);
-  const facetBooks = useMemo(() => books.filter((book) => (activeCategoryGroup
-    ? Boolean(selectedBookGroup?.categories.includes(book.category))
-    : (!activeCategory || book.category === activeCategory))
-    && (!activeSubcategory || book.subcategory === activeSubcategory)), [books, activeCategory, activeCategoryGroup, selectedBookGroup, activeSubcategory]);
-  const availableFacetKeys = useMemo(() => [...new Set(facetBooks.flatMap((book) => Object.keys(readBookSpecifications(book))))]
-    .filter((key) => !["editionStatus", "publisherCover"].includes(key)).sort(), [facetBooks]);
-  const availableFacetValues = useMemo(() => [...new Set(facetBooks.map((book) => readBookSpecifications(book)[facetKey])
-    .filter((value) => value !== undefined && value !== null).map(String))].sort(), [facetBooks, facetKey]);
+  const groupBooks = useMemo(() => filterCatalog(books, { groupId: activeCategoryGroup }, BOOK_GROUPS), [books, activeCategoryGroup]);
+  const availableCategories = useMemo(() => [...new Set(groupBooks.map((book) => book.category).filter(Boolean))].sort(), [groupBooks]);
+  const categoryBooks = useMemo(() => filterCatalog(groupBooks, { category: activeCategory }), [groupBooks, activeCategory]);
+  const availableSubcategories = useMemo(() => [...new Set(categoryBooks.map((book) => book.subcategory).filter(Boolean))].sort(), [categoryBooks]);
+  const facetBooks = useMemo(() => filterCatalog(categoryBooks, { subcategory: activeSubcategory }), [categoryBooks, activeSubcategory]);
+  const availableFacetKeys = useMemo(() => Object.keys(FACET_LABELS).filter((key) => facetOptions(facetBooks, key).length > 0), [facetBooks]);
+  const hasCatalogFilters = Boolean(activeCategory || activeCategoryGroup || activeSubcategory || Object.values(detailFilters).some(Boolean) || conditionFilter !== "all" || query || activeShelf !== "all" || sortBy !== "featured");
   const adminProducts = useMemo(() => {
     const term = adminQuery.trim().toLowerCase();
     return books.filter((book) => !term || `${book.title} ${book.category || ""} ${book.subcategory || ""} ${book.author}`.toLowerCase().includes(term)).slice(0, 80);
@@ -905,18 +909,11 @@ function App() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, activeShelf, activeCategory, activeCategoryGroup, activeSubcategory, facetKey, facetValue, conditionFilter, sortBy]);
+  }, [query, activeShelf, activeCategory, activeCategoryGroup, activeSubcategory, detailFilters, conditionFilter, sortBy]);
 
   useEffect(() => {
-    if (!availableFacetKeys.includes(facetKey)) {
-      setFacetKey(availableFacetKeys[0] || "");
-      setFacetValue("");
-    }
-  }, [availableFacetKeys, facetKey]);
-
-  useEffect(() => {
-    if (facetValue && !availableFacetValues.includes(facetValue)) setFacetValue("");
-  }, [availableFacetValues, facetValue]);
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const cartCount = cart.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const cartTotal = cart.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0), 0);
@@ -947,6 +944,14 @@ function App() {
   useEffect(() => {
     setCheckoutDraft(readCheckoutDraft(user));
   }, [user?.email]);
+  useEffect(() => {
+    if (!account.profile) return;
+    setCheckoutDraft((current) => ({
+      customerName: current.customerName || account.profile.name || "",
+      phone: current.phone || account.profile.phoneNumber || "",
+      address: current.address || account.profile.address || "",
+    }));
+  }, [account.profile]);
   const newArrivals = books.filter((book) => book.isNewArrival).slice(0, 4);
   const bestSellers = books.filter((book) => book.isBestSeller).slice(0, 4);
   const usedBooks = books.filter((book) => String(book.conditionLabel || "").startsWith("Used")).slice(0, 4);
@@ -1120,6 +1125,13 @@ function App() {
       showToast("Your saved cart will remain on your account.");
     }
     clearSession();
+  }
+
+  async function saveProfile(draft) {
+    const saved = await account.save(draft);
+    updateSessionProfile(saved);
+    setCheckoutDraft({ customerName: saved.name || "", phone: saved.phoneNumber || "", address: saved.address || "" });
+    return saved;
   }
 
   async function submitCheckout(event) {
@@ -1347,12 +1359,13 @@ function App() {
 
   function goToCatalog(shelf = "all") {
     setActiveShelf(shelf);
+    setQuery("");
     setActiveCategory("");
     setActiveCategoryGroup("");
     setActiveSubcategory("");
-    setFacetKey("");
-    setFacetValue("");
+    setDetailFilters({});
     setConditionFilter("all");
+    setSortBy("featured");
     navigate("/books");
   }
 
@@ -1361,8 +1374,7 @@ function App() {
     setActiveCategory(category);
     setActiveCategoryGroup("");
     setActiveSubcategory(subcategory);
-    setFacetKey("");
-    setFacetValue("");
+    setDetailFilters({});
     setConditionFilter("all");
     setQuery("");
     navigate("/books");
@@ -1373,8 +1385,7 @@ function App() {
     setActiveCategory("");
     setActiveCategoryGroup(groupId);
     setActiveSubcategory("");
-    setFacetKey("");
-    setFacetValue("");
+    setDetailFilters({});
     setConditionFilter("all");
     setQuery("");
     const group = BOOK_GROUPS.find((shelf) => shelf.id === groupId);
@@ -1383,8 +1394,7 @@ function App() {
 
   function selectGroupFacet(groupId, key, value) {
     selectCategoryGroup(groupId);
-    setFacetKey(key);
-    setFacetValue(value);
+    setDetailFilters({ [key]: value });
   }
 
   function openBuyback() {
@@ -1560,10 +1570,17 @@ function App() {
   }
 
   function CatalogPage() {
-    return <section className="catalog-section route-content" id="catalog"><div className="catalog-topline"><div><span className="eyebrow">YOUR NEXT FAVORITE IS HERE</span><h1>{activeCategoryLabel || "Browse all books"}</h1><p>Search the shelves, adjust the filters and sort your results.</p></div><span className="catalog-count">{filteredBooks.length.toLocaleString("en-IN")} sample {filteredBooks.length === 1 ? "listing" : "listings"} · page {page} of {totalPages}</span></div><div className="catalog-tools">
+    return <section className="catalog-section route-content" id="catalog"><div className="catalog-topline"><div><span className="eyebrow">YOUR NEXT FAVORITE IS HERE</span><h1>{activeCategoryLabel || "Browse all books"}</h1><p>Search the shelves, adjust the filters and sort your results.</p></div><span className="catalog-count" role="status">{filteredBooks.length.toLocaleString("en-IN")} {filteredBooks.length === 1 ? "book" : "books"} · page {currentPage} of {totalPages}</span></div><div className="catalog-tools">
       <label className="search-box"><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, topic, class, publisher…" aria-label="Search books by title, author, category, or topic" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}</label>
-      <div className="shelf-filters" role="group" aria-label="Filter books">{[["all", "All books"], ["new", "New in"], ["bestsellers", "Bestsellers"], ["under99", "Under ₹99"], ["under199", "Under ₹199"], ["under299", "Under ₹299"], ["examPrep", "NEET / JEE"]].map(([key, label]) => <button key={key} className={activeShelf === key ? "filter-chip active" : "filter-chip"} onClick={() => setActiveShelf(key)}>{label}</button>)}</div>
-      <div className="advanced-filters">{availableFacetKeys.length > 0 && <label><span>Refine by</span><select value={facetKey} onChange={(event) => { setFacetKey(event.target.value); setFacetValue(""); }}><option value="">Any detail</option>{availableFacetKeys.map((key) => <option key={key} value={key}>{key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</option>)}</select></label>}{facetKey && <label><span>{facetKey.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</span><select value={facetValue} onChange={(event) => setFacetValue(event.target.value)}><option value="">All options</option>{availableFacetValues.map((value) => <option key={value}>{value}</option>)}</select></label>}<label><span>Condition</span><select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}><option value="all">New &amp; used</option><option>New</option><option>Used · Like New</option><option>Used · Very Good</option><option>Used · Good</option><option>Used · Acceptable</option></select></label><label className="sort-select"><span>Sort</span><select value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="title">Title: A–Z</option></select></label>{(activeCategory || activeCategoryGroup || activeSubcategory || facetValue || conditionFilter !== "all" || query || activeShelf !== "all") && <button className="clear-filters" onClick={() => { setQuery(""); setActiveShelf("all"); setActiveCategory(""); setActiveCategoryGroup(""); setActiveSubcategory(""); setFacetKey(""); setFacetValue(""); setConditionFilter("all"); }}>Clear filters</button>}</div>
+      <div className="shelf-filters" role="group" aria-label="Filter books">{[["all", "All books"], ["new", "New in"], ["bestsellers", "Bestsellers"], ["under99", "Under ₹99"], ["under199", "Under ₹199"], ["under299", "Under ₹299"], ["under400", "Under ₹400"], ["examPrep", "NEET / JEE"]].map(([key, label]) => <button key={key} className={activeShelf === key ? "filter-chip active" : "filter-chip"} aria-pressed={activeShelf === key} onClick={() => key === "all" ? goToCatalog("all") : setActiveShelf(key)}>{label}</button>)}</div>
+      <div className="advanced-filters">
+        <label><span>Category</span><select value={activeCategory} onChange={(event) => { setActiveCategory(event.target.value); setActiveSubcategory(""); setDetailFilters({}); }}><option value="">{selectedBookGroup ? `All ${selectedBookGroup.label.toLowerCase()}` : "All categories"}</option>{availableCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+        {availableSubcategories.length > 0 && <label><span>Collection</span><select value={activeSubcategory} onChange={(event) => { setActiveSubcategory(event.target.value); setDetailFilters({}); }}><option value="">All collections</option>{availableSubcategories.map((subcategory) => <option key={subcategory} value={subcategory}>{subcategory}</option>)}</select></label>}
+        {availableFacetKeys.map((key) => <label key={key}><span>{FACET_LABELS[key]}</span><select value={detailFilters[key] || ""} onChange={(event) => setDetailFilters((current) => ({ ...current, [key]: event.target.value }))}><option value="">All {FACET_LABELS[key].toLowerCase()} options</option>{facetOptions(facetBooks, key).map((value) => <option key={value} value={value}>{value}</option>)}</select></label>)}
+        <label><span>Condition</span><select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}><option value="all">New &amp; used</option><option>New</option><option value="Used">All used books</option><option>Used · Like New</option><option>Used · Very Good</option><option>Used · Good</option><option>Used · Acceptable</option></select></label>
+        <label className="sort-select"><span>Sort</span><select value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="title">Title: A–Z</option></select></label>
+        {hasCatalogFilters && <button className="clear-filters" type="button" onClick={() => goToCatalog("all")}>Clear all filters</button>}
+      </div>
     </div>{booksLoading ? <div className="catalog-message"><span className="loader" />Finding good reads for you…</div> : booksError ? <div className="catalog-message error-message"><strong>We can’t reach the shelves right now.</strong><span>{booksError}</span><button className="button button-dark" onClick={loadBooks}>Try again</button></div> : visibleBooks.length ? <><div className="book-grid">{visibleBooks.map((book) => <BookCard key={book.id} book={book} />)}</div><nav className="catalog-pagination" aria-label="Catalog pages"><button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>← Previous</button><span>Page <strong>{page}</strong> of {totalPages}</span><button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages}>Next →</button></nav></> : <div className="catalog-message"><strong>No books found on this shelf.</strong><span>Try another search or browse all titles.</span><button className="text-link" onClick={() => goToCatalog("all")}>Show all books ↗</button></div>}</section>;
   }
 
@@ -1692,7 +1709,7 @@ function App() {
         <div className={`header-actions${user ? " is-signed-in" : ""}`}>
           <button className={wishlistIds.length ? "wishlist-header has-saved" : "wishlist-header"} type="button" onClick={() => navigate("/wishlist")} aria-label={`Open wishlist, ${wishlistIds.length} saved books`}>{wishlistIds.length ? "♥" : "♡"} <span>Wishlist</span><b>{wishlistIds.length}</b></button>
           <button className="sell-book-action" type="button" onClick={openBuyback}>Sell <span aria-hidden="true">↗</span></button>
-          {user ? <><button className="account-action" type="button" onClick={() => navigate("/orders")} title={`Signed in as ${user.email || "reader"}`}>Account</button>{isAdmin && <button className="admin-header-action" type="button" onClick={() => navigate("/admin")}>Admin</button>}<button className="sign-out-action" type="button" onClick={signOut}>Sign out</button></> : <button className="account-action" type="button" onClick={() => openAuth("login")}>Sign in</button>}
+          {user ? <><button className="account-action" type="button" onClick={() => navigate("/account")} title={`Signed in as ${user.email || "reader"}`} aria-label="Your account and profile"><span aria-hidden="true">◎</span> Account</button>{isAdmin && <button className="admin-header-action" type="button" onClick={() => navigate("/admin")}>Admin</button>}<button className="sign-out-action" type="button" onClick={signOut}>Sign out</button></> : <button className="account-action" type="button" onClick={() => openAuth("login", "/account")}>Sign in</button>}
           <Link className="bag-button" to="/cart" aria-label={`Open bag, ${cartCount} items`}><span className="bag-icon" aria-hidden="true">♧</span><span>Cart</span><span className="bag-count">{cartCount}</span></Link>
         </div>
       </header>
@@ -1711,6 +1728,7 @@ function App() {
           <Route path="/login" element={<section className="auth-route-page"><span className="eyebrow">YOUR MSRBOOKNEST ACCOUNT</span><h1>Welcome back to your bookshelf.</h1><p>Sign in to see your orders, keep your bag in sync and manage your used-book submissions.</p></section>} />
           <Route path="/register" element={<section className="auth-route-page"><span className="eyebrow">JOIN THE NEST</span><h1>Make the shelves yours.</h1><p>Create your account to save books and follow your orders.</p></section>} />
           <Route path="/orders" element={OrdersPage()} />
+          <Route path="/account" element={<AccountDashboard user={user} profile={account.profile} loading={account.loading} error={account.error} saving={account.saving} onReload={account.reload} onSave={saveProfile} onSignIn={() => openAuth("login", "/account")} orderCount={orders.length} wishlistCount={wishlistIds.length} />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/buyback" element={<BuybackDashboard user={user} onSignIn={() => openAuth("login")} onToast={showToast} />} />
           <Route path="/admin" element={isAdmin ? <AdminDashboard /> : <Navigate to="/login" replace />} />
@@ -1734,7 +1752,7 @@ function App() {
               const count = books.filter((book) => shelf.categories.includes(book.category)).length;
               const hasChildren = Boolean(shelf.filterKey || shelf.childCategories?.length);
               const expanded = navigationExpandedGroup === shelf.id;
-              const shelfOptions = shelf.filterKey ? [...new Set(books.filter((book) => shelf.categories.includes(book.category)).map((book) => readBookSpecifications(book)[shelf.filterKey]).filter(Boolean).map(String))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })) : [];
+              const shelfOptions = shelf.filterKey ? facetOptions(books.filter((book) => shelf.categories.includes(book.category)), shelf.filterKey) : [];
               return <div className="nav-drawer-category" key={shelf.id}>
                 <div className="nav-drawer-category-row">
                   <button className="nav-drawer-category-main" type="button" onClick={() => { setNavigationOpen(false); selectCategoryGroup(shelf.id); }}><span className="catalog-category-icon">{shelf.icon}</span><span>{shelf.label}</span><small>{count}</small></button>
@@ -1757,6 +1775,7 @@ function App() {
           <div className="nav-drawer-footer">
             <button className="nav-sell-link" type="button" onClick={() => { setNavigationOpen(false); openBuyback(); }}><span>Sell a book</span><span aria-hidden="true">↗</span></button>
             <button className="nav-orders-link" type="button" onClick={() => { setNavigationOpen(false); navigate("/orders"); }}>Orders &amp; deliveries<span aria-hidden="true">→</span></button>
+            {user && <button className="nav-orders-link" type="button" onClick={() => { setNavigationOpen(false); navigate("/account"); }}>Your account &amp; profile<span aria-hidden="true">→</span></button>}
             {user && <button className="nav-sign-out-link" type="button" onClick={() => { setNavigationOpen(false); signOut(); }}>Sign out<span aria-hidden="true">↪</span></button>}
           </div>
         </aside>
