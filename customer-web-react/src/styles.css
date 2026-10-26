@@ -1161,7 +1161,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .wishlist-header, .admin-header-action, .sign-out-action { min-height: 36px; border: 1px solid #e7dac6; border-radius: 999px; padding: 0 10px; color: #174b7a; background: #fff; font-size: 9px; font-weight: 600; white-space: nowrap; }
 .wishlist-header { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; }
 .wishlist-header span { font-size: 9px; }
-.wishlist-header b { min-width: 17px; height: 17px; display: inline-grid; place-items: center; border-radius: 50%; color: #fff; background: #c62838; font-size: 8px; }
 .sign-out-action:hover, .wishlist-header:hover, .admin-header-action:hover { border-color: #e4bd32; background: #fff8dc; }
 .sell-book-action { min-height: 36px; padding: 0 12px; }
 .account-action { min-height: 36px; padding: 0 11px; }
@@ -1322,7 +1321,6 @@ main#top { scroll-margin-top: 94px; }
   .header-actions { grid-column: 2; grid-row: 1; gap: 5px; }
   .header-actions .wishlist-header { width: 33px; min-width: 33px; justify-content: center; padding: 0; }
   .header-actions .wishlist-header span { display: none; }
-  .header-actions .wishlist-header b { width: 14px; min-width: 14px; height: 14px; position: absolute; transform: translate(12px,-11px); font-size: 7px; }
   .header-actions .account-action, .header-actions .sell-book-action { min-height: 32px; padding: 0 9px; font-size: 8px; }
   .header-actions .bag-button { min-height: 32px; padding: 0 8px; font-size: 8px; }
   .header-actions .bag-icon { display: none; }
@@ -2011,6 +2009,30 @@ body { color: var(--ink); background: var(--paper); }
   }
 }
 
+/* Keep the account control free of yellow fills. */
+.site-header .header-actions .account-action,
+.site-header .header-actions .account-action:hover {
+  border-color: #d6e0e8;
+  color: #174b7a;
+  background: #fff;
+}
+.site-header .header-actions .account-action > span[aria-hidden="true"] {
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  color: #fff;
+  background: #174b7a;
+  font-size: 13px;
+  line-height: 1;
+}
+.site-header .header-actions .account-action:focus-visible {
+  outline: 2px solid #174b7a;
+  outline-offset: 2px;
+}
+
 /* Give the homepage promotions a prominent billboard size on desktop. */
 @media (min-width: 761px) {
   .marketplace-carousel { width: 100%; max-width: 1600px; }
@@ -2157,7 +2179,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     gap: 6px;
   }
   .header-actions .wishlist-header { width: auto; min-width: 33px; min-height: 32px; padding: 0 8px; }
-  .header-actions .wishlist-header b { position: static; transform: none; }
   .header-actions .account-action,
   .header-actions:not(.is-signed-in) .account-action { display: inline-flex; min-height: 32px; padding: 0 9px; font-size: 9px; }
   .header-actions.is-signed-in .account-action { display: none; }
