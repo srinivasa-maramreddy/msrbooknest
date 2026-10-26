@@ -1813,7 +1813,6 @@ function App() {
               <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
               <button className="auth-forgot-link" type="button" onClick={() => switchAuthMode("forgot")}>Forgot password?</button>
               <p className="identity-note">Demo reader: reader@msrbooknest.demo · ReaderDemo@123</p>
-              <p className="identity-note">Demo admin: admin@msrbooknest.demo · AdminDemo@123</p>
               <button className="button button-dark button-full" type="submit" disabled={authBusy}>{authBusy ? "Signing in…" : "Sign in"}</button>
               <p className="auth-switch">New to msrbooknest? <button type="button" onClick={() => switchAuthMode("register")}>Create an account</button></p>
               <p className="identity-note">{STATIC_PAGES_DEMO ? "Public browser demo: account, cart, orders, and buyback data stay in this browser. Email verification is simulated; no payments are sent." : "Your password is verified securely and your session uses a signed access token."}</p>
